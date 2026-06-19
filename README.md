@@ -24,7 +24,7 @@ Current Progress:
 
 \- \[x] Ingestion Pipeline
 
-\- \[ ] Retrieval Engine
+\- \[x] Retrieval Engine
 
 \- \[ ] Memory Layer
 
