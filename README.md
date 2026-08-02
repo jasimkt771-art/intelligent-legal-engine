@@ -26,7 +26,7 @@ Current Progress:
 
 \- \[x] Retrieval Engine
 
-\- \[ ] Memory Layer
+\- \[x] Memory Layer
 
 \- \[ ] Cache Layer
 
