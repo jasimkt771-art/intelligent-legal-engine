@@ -28,7 +28,7 @@ Current Progress:
 
 \- \[x] Memory Layer
 
-\- \[ ] Cache Layer
+\- \[x] Cache Layer
 
 \- \[ ] UI Layer
 
