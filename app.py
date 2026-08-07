@@ -41,54 +41,52 @@ def process_query(query, session_id, redis_client, cache_index):
 
     return response
 
-if __name__ == "__main__":
+def main():
+    st.set_page_config(
+        page_title="Intelligent Legal Engine",
+        page_icon="⚖️",
+        layout="wide"
+    )
+
+    st.title("⚖️ Intelligent Legal Engine")
 
     redis_client, cache_index = initialize_connections()
 
-    session_id = "test_session"
+    with st.sidebar:
+        col1, col2 = st.columns([4, 1])
 
-    while True:
+        with col1:
+            if st.button("+ New Chat"):
+                st.session_state.session_id = str(uuid.uuid4())
 
-        print("\n========== Intelligent Legal Engine ==========")
-        print("1. Ask Question")
-        print("2. Show Exact Cache")
-        print("3. Clear Cache")
-        print("4. Exit")
+        with col2:
+            st.button("⚙️")
 
-        choice = input("\nEnter your choice: ")
+        if "session_id" not in st.session_state:
+            st.session_state.session_id = str(uuid.uuid4())
 
-        if choice == "1":
+        session_id = st.session_state.session_id
 
-            query = input("\nEnter your question: ")
+        st.divider()
 
-            response = process_query(
-                query,
-                session_id,
-                redis_client,
-                cache_index
-            )
+    load_chat_history(session_id)
 
-            print("\nAssistant:\n")
-            print(response)
+    query = st.chat_input("Ask a legal question...")
 
-        elif choice == "2":
+    if query:
+        with st.chat_message("user"):
+            st.write(query)
 
-            show_exact_cache(redis_client)
+        response = process_query(
+            query,
+            session_id,
+            redis_client,
+            cache_index
+        )
 
-        elif choice == "3":
+        with st.chat_message("assistant"):
+            st.write(response)
 
-            clear_cache(
-                redis_client,
-                cache_index
-            )
 
-            print("\nCache cleared successfully.")
-
-        elif choice == "4":
-
-            print("Goodbye!")
-            break
-
-        else:
-
-            print("\nInvalid choice.")
+if __name__ == "__main__":
+    main()
