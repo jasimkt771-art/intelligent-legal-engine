@@ -1,8 +1,11 @@
 import streamlit as st
 import uuid
+
+import supabase
+
 from retrieval import get_context
 from memory import (get_memory, fetch_history, save_turn)
-from cache import (connect_to_cache, check_cache, save_to_cache, show_exact_cache, clear_cache)
+from cache import (connect_to_cache, check_cache, save_to_cache, clear_cache)
 from llm import generate_response
 
 def initialize_connections():
@@ -11,7 +14,7 @@ def initialize_connections():
         return redis_client, cache_index
 
     except Exception as e:
-        print("Connection error(initialize_connections[app.py]): \n",e)
+        print("\nConnection error(initialize_connections[app.py]): \n",e)
         raise
 
 def load_chat_history(session_id):
@@ -34,15 +37,15 @@ def load_chat_history(session_id):
                 st.write(turn["bot_response"])
 
     except TypeError as e:
-        print('Invalid input(load_chat_history([app.py])): \n',e)
+        print('\nInvalid input(load_chat_history([app.py])): \n',e)
         raise
 
     except KeyError as e:
-        print('Missing required field in chat history(load_chat_history([app.py])): \n',e)
+        print('\nMissing required field in chat history(load_chat_history([app.py])): \n',e)
         raise
 
     except Exception as e:
-        print('Error loading chat history(load_chat_history([app.py])): \n',e)
+        print('\nError loading chat history(load_chat_history([app.py])): \n',e)
 
 def process_query(query, session_id, redis_client, cache_index):
     try:
@@ -67,15 +70,26 @@ def process_query(query, session_id, redis_client, cache_index):
         response = generate_response(query, contexts, history)
         print("\nResponse is from LLLM\n")
 
-        save_turn(session_id, query, response)
+        try:
+            save_turn(session_id, query, response)
 
-        print(f'Saved\nQuery:\n{query}\n\nAND\n\nResponse:\n{response}\n\nTo database chat_history with session_id: {session_id}\n\n')
-        save_to_cache(redis_client, cache_index, query, response)
+            print(f'Saved\nQuery:\n{query}\n\nAND\n\nResponse:\n{response}\n\nTo database chat_history with session_id: {session_id}\n\n')
+
+            try:
+                save_to_cache(redis_client, cache_index, query, response)
+
+            except Exception as e:
+                print(f"Cache unavailable, response will not be saved to cache(process_query[app.py]): \n{e}")
+
+        except supabase.SupabaseException as e:
+            print(f"Supabase unavailable, response will not be saved to memory or cache(process_query[app.py]): \n{e}")
+
         print()
         return response
 
     except Exception as e:
-        print('Error generating response(process_query([app.py])): \n',e)
+        print('Error generating response(process_query([app.py])): \n', e)
+        raise
 
 def main():
     try:
@@ -142,7 +156,7 @@ def main():
                     "Please try again."
                 )
 
-                raise
+                return
 
             with st.chat_message("assistant"):
                 st.write(response)
@@ -154,7 +168,7 @@ def main():
             "The application encountered an error. "
             "Please try again later."
         )
-        raise
+        return
 
 if __name__ == "__main__":
     main()

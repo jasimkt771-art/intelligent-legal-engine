@@ -2,52 +2,67 @@ from sentence_transformers import SentenceTransformer
 from pinecone_text.sparse import BM25Encoder
 from pinecone import Pinecone
 import cohere
+import cache
 
 from config import PINECONE_API_KEY, PINECONE_INDEX_NAME1, COHERE_API_KEY
 
 
-def initialize_models():
-    try:
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+# Load models once when this module is loaded
+# Reusable resources
+model = cache.embedding_model
+bm25 = None
+pinecone_index = None
+cohere_client = None
 
-        try:
-            bm25 = BM25Encoder().load("bm25.json")
-        except FileNotFoundError as e:
-            print(f"BM25 model file not found: \n{e}")
-            raise
+
+def initialize_models():
+    global model, bm25
+
+    try:
+        # Load the embedding model only once
+        if model is None:
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+
+        # Load the BM25 encoder only once
+        if bm25 is None:
+            bm25 = BM25Encoder()
+            bm25.load("bm25.json")
 
         return model, bm25
 
     except Exception as e:
-        print(f"Error initializing models(initialize_models[retrieval.py]): \n{e}")
+        print(f"Error initializing retrieval models(initialize_models[retrieval.py]):\n{e}")
         raise
 
 
 def connect_to_pinecone():
+    global pinecone_index
+
     try:
-        pc = Pinecone(
-            api_key=PINECONE_API_KEY
-        )
+        if pinecone_index is None:
+            pc = Pinecone(api_key=PINECONE_API_KEY)
+            pinecone_index = pc.Index(PINECONE_INDEX_NAME1)
 
-        index = pc.Index(PINECONE_INDEX_NAME1)
-
-        return index
+        return pinecone_index
 
     except Exception as e:
-        print(f"Error connecting to Pinecone(connect_to_pinecone[retrieval.py]): \n{e}")
+        print(f"Error connecting to Pinecone(connect_to_pinecone[retrieval.py]):\n{e}")
         raise
-
 
 def connect_to_cohere():
-    try:
-        co = cohere.Client(COHERE_API_KEY)
+    global cohere_client
 
-        return co
+    try:
+        if cohere_client is None:
+            cohere_client = cohere.ClientV2(
+                api_key=COHERE_API_KEY
+            )
+
+        return cohere_client
 
     except Exception as e:
-        print(f"Error connecting to Cohere(connect_to_cohere[retrieval.py]): \n{e}")
+        print(f"Error connecting to Cohere: {e}")
         raise
-
 
 def generate_query_vectors(query):
 
@@ -57,17 +72,26 @@ def generate_query_vectors(query):
     try:
         model, bm25 = initialize_models()
 
+        if model is None or bm25 is None:
+            raise RuntimeError("Retrieval models could not be initialized.")
+
         dense_vector = model.encode(query)
         sparse_vector = bm25.encode_queries(query)
 
         return dense_vector.tolist(), sparse_vector
 
     except TypeError as e:
-        print(f"Invalid input for vector generation(generate_query_vectors[retrieval.py]): \n{e}")
+        print(
+            f"Invalid input for vector generation"
+            f"(generate_query_vectors[retrieval.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error generating query vectors(generate_query_vectors[retrieval.py]): \n{e}")
+        print(
+            f"Error generating query vectors"
+            f"(generate_query_vectors[retrieval.py]): \n{e}"
+        )
         raise
 
 
@@ -85,43 +109,27 @@ def hybrid_search(dense_vector, sparse_vector):
         try:
             matches = results["matches"]
         except KeyError as e:
-            print(f"Missing 'matches' field in Pinecone response(hybrid_search[retrieval.py]): \n{e}")
+            print(
+                f"Missing 'matches' field in Pinecone response"
+                f"(hybrid_search[retrieval.py]): \n{e}"
+            )
             raise
 
         return matches
 
     except TypeError as e:
-        print(f"Invalid vector input for Pinecone search(hybrid_search[retrieval.py]): \n{e}")
+        print(
+            f"Invalid vector input for Pinecone search"
+            f"(hybrid_search[retrieval.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error performing hybrid search(hybrid_search[retrieval.py]): \n{e}")
+        print(
+            f"Error performing hybrid search"
+            f"(hybrid_search[retrieval.py]): \n{e}"
+        )
         raise
-
-
-"""
-Format of matches object:
-results
-└── "matches"
-    └── list
-        ├── match[0]
-        │   ├── "id"
-        │   ├── "score"
-        │   └── "metadata"
-        │       └── "text"
-        │
-        ├── match[1]
-        │   ├── "id"
-        │   ├── "score"
-        │   └── "metadata"
-        │       └── "text"
-        │
-        └── ...
-            ├── "id"
-            ├── "score"
-            └── "metadata"
-                └── "text"
-"""
 
 
 def rerank_results(query, matches):
@@ -154,15 +162,24 @@ def rerank_results(query, matches):
         return top_contexts
 
     except KeyError as e:
-        print(f"Missing required match field(rerank_results[retrieval.py]): \n{e}")
+        print(
+            f"Missing required match field"
+            f"(rerank_results[retrieval.py]): \n{e}"
+        )
         raise
 
     except TypeError as e:
-        print(f"Invalid input for reranking(rerank_results[retrieval.py]): \n{e}")
+        print(
+            f"Invalid input for reranking"
+            f"(rerank_results[retrieval.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error reranking results(rerank_results[retrieval.py]): \n{e}")
+        print(
+            f"Error reranking results"
+            f"(rerank_results[retrieval.py]): \n{e}"
+        )
         raise
 
 
@@ -177,8 +194,12 @@ def get_context(query):
         return contexts
 
     except Exception as e:
-        print(f"Error getting context(get_context[retrieval.py]): \n{e}")
+        print(
+            f"Error getting context"
+            f"(get_context[retrieval.py]): \n{e}"
+        )
         raise
+
 
 def main():
     try:
@@ -195,7 +216,7 @@ def main():
 
             for i, context in enumerate(contexts, start=1):
                 print(f"Context {i}:")
-                print(context[:500])
+                print(context[:100])
                 print("-" * 50)
 
     except Exception as e:

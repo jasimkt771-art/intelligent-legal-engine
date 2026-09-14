@@ -142,7 +142,7 @@ def upsert_to_pinecone(hybrid_vectors):
             records.append(record)
 
         # Upload records to Pinecone
-        # index.upsert(vectors=records)
+        #index.upsert(vectors=records)
 
         print(f"Successfully uploaded {len(records)} records.")
 
@@ -166,59 +166,44 @@ def upsert_to_pinecone(hybrid_vectors):
 
 
 def main():
-    print("\n--- Testing extract_text_from_pdf(): invalid PDF path ---")
+    pdf_path = r"C:\Users\hp\OneDrive\Desktop\Project 6\3. Implementation\Data\Final Constitution2.pdf"
+
+    print("\n--- Testing complete ingestion pipeline ---")
 
     try:
-        result = extract_text_from_pdf(
-            r"C:\invalid\does_not_exist.pdf"
-        )
-        print(f"Returned value: {result}")
+        # Step 1: Extract text from PDF
+        text = extract_text_from_pdf(pdf_path)
+
+        print(f"Extracted text length: {len(text)} characters")
+
+        # Step 2: Extract Articles
+        articles = extract_articles(text)
+
+        print(f"Extracted {len(articles)} articles")
+
+        """for i, article in enumerate(articles):
+            print(article)"""
+
+        # Step 3: Generate hybrid vectors
+        hybrid_vectors = generate_hybrid_vectors(articles)
+
+        print(f"Generated {len(hybrid_vectors)} hybrid vectors")
+
+        for i, vector in enumerate(hybrid_vectors, start=1):
+            print(f'Article {i}')
+            print(f'\nDense Vector:\n{vector["dense_vector"][:5]}')
+            print(f'\nSparse Vector:\n{vector["sparse_vector"]}')
+            print(vector["text"][:100])
+
+        # Step 4: Upload vectors to Pinecone
+        result = upsert_to_pinecone(hybrid_vectors)
+
+        print(f"Pinecone upload result: {result}")
+
+        print("\n--- Ingestion pipeline completed successfully ---")
 
     except Exception as e:
-        print(f"Exception caught in main: \n{e}")
-
-
-    print("\n--- Testing extract_articles(): invalid input ---")
-
-    try:
-        result = extract_articles(None)
-        print(f"Returned value: {result}")
-
-    except Exception as e:
-        print(f"Exception caught in main: \n{e}")
-
-
-    print("\n--- Testing generate_hybrid_vectors(): invalid input ---")
-
-    try:
-        result = generate_hybrid_vectors(None)
-        print(f"Returned value: {result}")
-
-    except Exception as e:
-        print(f"Exception caught in main: \n{e}")
-
-
-    print("\n--- Testing generate_hybrid_vectors(): invalid article item ---")
-
-    try:
-        result = generate_hybrid_vectors([
-            "Article 21: Protection of life and personal liberty.",
-            None
-        ])
-        print(f"Returned value: {result}")
-
-    except Exception as e:
-        print(f"Exception caught in main: \n{e}")
-
-
-    print("\n--- Testing upsert_to_pinecone(): invalid input ---")
-
-    try:
-        result = upsert_to_pinecone(None)
-        print(f"Returned value: {result}")
-
-    except Exception as e:
-        print(f"Exception caught in main: \n{e}")
+        print(f"Error in ingestion pipeline(main[ingestion.py]): \n{e}")
 
 
 if __name__ == "__main__":

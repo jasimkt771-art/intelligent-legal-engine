@@ -1,14 +1,25 @@
+import supabase
 from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 
 
+# Create Supabase client once
+supabase_client = None
+
 def connect_to_supabase():
+    global supabase_client
+
     try:
-        client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        return client
+        if supabase_client is None:
+            supabase_client = supabase.create_client(
+                SUPABASE_URL,
+                SUPABASE_KEY
+            )
+
+        return supabase_client
 
     except Exception as e:
-        print(f"Error connecting to Supabase(connect_to_supabase[memory.py]): \n{e}")
+        print(f"Error connecting to Supabase: {e}")
         raise
 
 
@@ -34,11 +45,17 @@ def fetch_history(session_id):
         return response.data
 
     except TypeError as e:
-        print(f"Invalid session ID for history retrieval(fetch_history[memory.py]): \n{e}")
+        print(
+            f"Invalid session ID for history retrieval"
+            f"(fetch_history[memory.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error fetching chat history(fetch_history[memory.py]): \n{e}")
+        print(
+            f"Error fetching chat history"
+            f"(fetch_history[memory.py]): \n{e}"
+        )
         raise
 
 
@@ -62,11 +79,17 @@ def save_turn(session_id, user_query, bot_response):
         }).execute()
 
     except TypeError as e:
-        print(f"Invalid input for saving chat turn(save_turn[memory.py]): \n{e}")
+        print(
+            f"Invalid input for saving chat turn"
+            f"(save_turn[memory.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error saving chat turn(save_turn[memory.py]): \n{e}")
+        print(
+            f"Error saving chat turn"
+            f"(save_turn[memory.py]): \n{e}"
+        )
         raise
 
 
@@ -99,11 +122,17 @@ def format_history(history):
         return formatted_history
 
     except TypeError as e:
-        print(f"Invalid history input(format_history[memory.py]): \n{e}")
+        print(
+            f"Invalid history input"
+            f"(format_history[memory.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error formatting chat history(format_history[memory.py]): \n{e}")
+        print(
+            f"Error formatting chat history"
+            f"(format_history[memory.py]): \n{e}"
+        )
         raise
 
 
@@ -115,15 +144,24 @@ def get_memory(session_id):
 
         return formatted_history
 
+    except supabase.SupabaseException as e:
+        print(
+            f"Supabase unavailable, continuing without memory"
+            f"(get_memory[memory.py]): \n{e}"
+        )
+        return ''
+
     except Exception as e:
-        print(f"Error getting memory(get_memory[memory.py]): \n{e}")
+        print(
+            f"Error getting memory"
+            f"(get_memory[memory.py]): \n{e}"
+        )
         raise
 
 
 def main():
     session_id = "test_session"
 
-    # Save two conversations
     save_turn(
         session_id,
         "What is Article 21?",
@@ -136,19 +174,16 @@ def main():
         "Article 19 guarantees several freedoms."
     )
 
-    # Fetch them back
     history = fetch_history(session_id)
 
     print("Raw History:")
     print(history)
 
-    # Format for the LLM
     formatted = format_history(history)
 
     print("\nFormatted History:")
     print(formatted)
 
-    # Test the convenience function
     memory = get_memory(session_id)
 
     print("\n=== Memory from get_memory() ===")
