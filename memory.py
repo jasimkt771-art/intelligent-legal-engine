@@ -2,24 +2,16 @@ import supabase
 from supabase import create_client
 from config import SUPABASE_URL, SUPABASE_KEY
 
-
-# Create Supabase client once
-supabase_client = None
-
 def connect_to_supabase():
-    global supabase_client
-
     try:
-        if supabase_client is None:
-            supabase_client = supabase.create_client(
-                SUPABASE_URL,
-                SUPABASE_KEY
-            )
-
-        return supabase_client
+        client = create_client(
+            SUPABASE_URL,
+            SUPABASE_KEY
+        )
+        return client
 
     except Exception as e:
-        print(f"Error connecting to Supabase: {e}")
+        print(f"Error connecting to Supabase(connect_to_supabase[memory.py]):\n{e}")
         raise
 
 
