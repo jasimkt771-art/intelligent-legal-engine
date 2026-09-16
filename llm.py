@@ -1,6 +1,8 @@
 import ollama
 from google import genai
-from config import LLM_PROVIDER, LLM_MODEL, GEMINI_API_KEY
+from config import LLM_PROVIDER, OLLAMA_MODEL, GEMINI_MODEL, GEMINI_API_KEY
+
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def build_prompt(query, contexts, history):
     try:
@@ -48,6 +50,8 @@ If the Retrieved Context contains enough information to answer the question:
 - Answer using only the relevant retrieved information.
 - Explain why the relevant Article/Articles answer the question.
 - Explain in detail even when u have low data like the response must be big but not inaccurate.
+- Provide enough explanation to fully answer the question without adding unsupported information.
+- The response length should follow the Response Length rules above.
 - Cite the relevant Article naturally.
 - At the end, u should have a section named citations that shows all the articles in the Retrieved Context that are used to answer the query.
 - It should look like this:
@@ -68,9 +72,11 @@ If the user asks about an Article that is not present in the Retrieved Context:
 - Say that the requested Article was not included in the retrieved context.
 
 Formatting Rules:
-- Write every sentence on its own line.
-- Never place two sentences on the same line.
-- Insert a newline after every period, question mark, or exclamation mark.
+- Make the response easy to read.
+- Use short paragraphs.
+- Use bullet points or numbered lists when they improve clarity.
+- Avoid long blocks of text.
+- Keep related ideas together.
 
 Answer:
 """
@@ -105,37 +111,64 @@ def generate_response(query, contexts, history):
         print_prompt_preview(query, contexts, history, max_chars=200)
 
         if LLM_PROVIDER == "ollama":
+
+            ollama_prompt = prompt + """
+
+Ollama-Specific Instructions:
+- Provide a longer and more detailed response while remaining accurate and grounded in the Retrieved Context.
+"""
+
             response = ollama.chat(
-                model=LLM_MODEL,
+                model=OLLAMA_MODEL,
                 messages=[
                     {
                         "role": "user",
-                        "content": prompt
+                        "content": ollama_prompt
                     }
                 ]
             )
 
         elif LLM_PROVIDER == "gemini":
-            client = genai.Client(api_key=GEMINI_API_KEY)
+
+            gemini_prompt = prompt + """
+
+Gemini-Specific Instructions:
+- Explain the answer as if you are speaking to someone with no legal background.
+- Use simple, everyday language instead of formal legal language.
+- After mentioning a legal provision or legal term, explain what it means in simple words.
+- Focus on explaining what the provision actually means in practical terms in relation to the user's question.
+- Avoid unnecessary legal jargon.
+- If a legal term is necessary, immediately explain it in simple words.
+- Use clear and practical examples whenever they help the user understand the provision.
+- Keep the response concise while still covering all relevant information from the Retrieved Context.
+"""
 
             response = client.models.generate_content(
-                model=LLM_MODEL,
-                contents=prompt
+                model=GEMINI_MODEL,
+                contents=gemini_prompt
             )
 
             return response.text
 
         else:
-            raise ValueError(f"Unsupported LLM provider(generate_response[llm.py]): {LLM_PROVIDER}")
+            raise ValueError(
+                f"Unsupported LLM provider(generate_response[llm.py]): {LLM_PROVIDER}"
+            )
 
         return response["message"]["content"]
 
     except KeyError as e:
-        print("\nMissing required field in Ollama response(generate_response[llm.py]): \n",e)
+        print(
+            "\nMissing required field in Ollama response(generate_response[llm.py]): \n",
+            e
+        )
         raise
 
     except Exception as e:
-        print('\nError generating response(generate_response[llm.py]):\n',e)
+        print(
+            '\nError generating response(generate_response[llm.py]):\n',
+            e
+        )
         raise
 
 """"
