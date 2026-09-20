@@ -47,6 +47,115 @@ def load_chat_history(session_id):
     except Exception as e:
         print('\nError loading chat history(load_chat_history([app.py])): \n',e)
 
+def is_follow_up_query(query, has_history):
+    """
+    Determines whether a query is an obvious conversational follow-up.
+
+    Follow-up queries should bypass the global cache because their meaning
+    may depend on previous conversation history.
+    """
+
+    if not has_history:
+        return False
+
+    follow_up_patterns = [
+        "what about",
+        "how about",
+        "explain that",
+        "explain this"
+        "explain simply"
+        "explain again",
+        "explain the above",
+        "explain the previous",
+        "the previous answer",
+        "the previous point",
+        "the previous one",
+        "as you mentioned",
+        "you mentioned earlier",
+        "you said earlier",
+        "what happens",
+        "what do u mean",
+        "what did you mean",
+        "tell me more about",
+        "compare that",
+        "compare this",
+        "compare it",
+        "does that apply",
+        "does this apply",
+        "why did you say",
+    ]
+
+    normalized_query = query.lower().strip()
+
+    return any(
+        pattern in normalized_query
+        for pattern in follow_up_patterns
+    )
+
+def build_retrieval_query(query, history):
+    """
+    Builds a retrieval query using the latest conversation
+    and the current user query.
+    """
+
+    if not isinstance(query, str):
+        raise TypeError("Query must be a string.")
+
+    if not isinstance(history, str):
+        raise TypeError("History must be a string.")
+
+    if not history.strip():
+        return query
+
+    lines = history.splitlines()
+
+    message_starts = []
+
+    for i in range(len(lines)):
+        if lines[i].startswith(("User:", "Assistant:")):
+            message_starts.append(i)
+
+    messages = []
+
+    for i in range(len(message_starts)):
+        start = message_starts[i]
+
+        end = (
+            message_starts[i + 1]
+            if i + 1 < len(message_starts)
+            else len(lines)
+        )
+
+        messages.append("\n".join(lines[start:end]).strip())
+
+    latest_user_message = ""
+    latest_assistant_message = ""
+
+    for message in reversed(messages):
+        if message.startswith("Assistant:") and not latest_assistant_message:
+            latest_assistant_message = message[len("Assistant:"):].strip()
+
+        elif message.startswith("User:") and not latest_user_message:
+            latest_user_message = message[len("User:"):].strip()
+
+        if latest_user_message and latest_assistant_message:
+            break
+
+    retrieval_query = f"""
+Previous User Question:
+{latest_user_message}
+
+Previous Assistant Answer:
+{latest_assistant_message}
+
+Current User Question:
+{query}
+""".strip()
+
+    print('\n====Current Retrieval Query=====\n\n', retrieval_query)
+
+    return retrieval_query
+
 def process_query(query, session_id, redis_client, cache_index):
     try:
         if not isinstance(query, str):
