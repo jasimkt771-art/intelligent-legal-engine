@@ -51,6 +51,107 @@ def fetch_history(session_id):
         raise
 
 
+def get_recent_sessions(limit=5):
+    try:
+        if not isinstance(limit, int):
+            raise TypeError("Limit must be an integer.")
+
+        if limit <= 0:
+            raise ValueError("Limit must be greater than zero.")
+
+        client = connect_to_supabase()
+
+        response = (
+            client.table("chat_history")
+            .select("session_id, user_query, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        if response.data is None:
+            return []
+
+        sessions = {}
+
+        for row in response.data:
+            session_id = row["session_id"]
+
+            if session_id not in sessions:
+                sessions[session_id] = {
+                    "session_id": session_id,
+                    "first_query": row["user_query"],
+                    "latest_activity": row["created_at"]
+                }
+
+            else:
+                sessions[session_id]["first_query"] = row["user_query"]
+
+        recent_sessions = list(sessions.values())
+
+        recent_sessions.sort(
+            key=lambda session: session["latest_activity"],
+            reverse=True
+        )
+
+        return recent_sessions[:limit]
+
+    except TypeError as e:
+        print(
+            f"Invalid input for recent session retrieval"
+            f"(get_recent_sessions[memory.py]): \n{e}"
+        )
+        raise
+
+    except ValueError as e:
+        print(
+            f"Invalid limit for recent session retrieval"
+            f"(get_recent_sessions[memory.py]): \n{e}"
+        )
+        raise
+
+    except Exception as e:
+        print(
+            f"Error fetching recent sessions"
+            f"(get_recent_sessions[memory.py]): \n{e}"
+        )
+        raise
+
+
+def fetch_session_messages(session_id):
+    try:
+        if not isinstance(session_id, str):
+            raise TypeError("Session ID must be a string.")
+
+        client = connect_to_supabase()
+
+        response = (
+            client.table("chat_history")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+
+        if response.data is None:
+            return []
+
+        return response.data
+
+    except TypeError as e:
+        print(
+            f"Invalid session ID for full session retrieval"
+            f"(fetch_session_messages[memory.py]): \n{e}"
+        )
+        raise
+
+    except Exception as e:
+        print(
+            f"Error fetching session messages"
+            f"(fetch_session_messages[memory.py]): \n{e}"
+        )
+        raise
+
+
 def save_turn(session_id, user_query, bot_response):
     try:
         if not isinstance(session_id, str):
