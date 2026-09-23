@@ -1,17 +1,32 @@
 import ollama
 from google import genai
-from config import LLM_PROVIDER, OLLAMA_MODEL, GEMINI_MODEL, GEMINI_API_KEY
+from groq import Groq
 
+from config import (
+    LLM_PROVIDER,
+    OLLAMA_MODEL,
+    GEMINI_MODEL,
+    GEMINI_API_KEY,
+    GROQ_API_KEY,
+    GROQ_MODEL,
+    GEMINI,
+    GROQ
+)
+
+
+# Gemini client
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Groq client
+groq_client = Groq(api_key=GROQ_API_KEY)
+
 
 def build_prompt(query, contexts, history):
     try:
         if not isinstance(query, str):
             raise TypeError("Query must be a string.")
-
         if not isinstance(contexts, list):
             raise TypeError("Query must be a list.")
-
         if not isinstance(history, str):
             raise TypeError("History must be a string.")
 
@@ -74,7 +89,7 @@ If the user asks about an Article that is not present in the Retrieved Context:
 Formatting Rules:
 - Make the response easy to read.
 - Use short paragraphs.
-- Use bullet points or numbered lists when they improve clarity.
+- Use bullet points or numbered lists when they improve readability.
 - Avoid long blocks of text.
 - Keep related ideas together.
 
@@ -84,36 +99,116 @@ Answer:
         return prompt
 
     except TypeError as e:
-        print('\nInvalid input for prompt construction(build_prompt[llm.py]): \n', e)
+        print(
+            '\nInvalid input for prompt construction(build_prompt[llm.py]): \n',
+            e
+        )
         raise
 
     except Exception as e:
-        print(f"\nError building prompt(build_prompt[llm.py]): \n{e}")
+        print(
+            f"\nError building prompt(build_prompt[llm.py]): \n{e}"
+        )
         raise
 
+
 def print_prompt_preview(query, contexts, history, max_chars=100):
-    #Print a readable, truncated preview of the prompt for terminal debugging.
     print("\n========== PROMPT PREVIEW ==========\n")
     print(f"User Question:\n{query}\n")
     print(f"Previous Conversation:\n{history}\n")
     print("Retrieved Context (truncated for display):")
+
     for i, ctx in enumerate(contexts, start=1):
-        print(f"{ctx[:max_chars]}{'...' if len(ctx) > max_chars else ''}")
+        print(
+            f"{ctx[:max_chars]}"
+            f"{'...' if len(ctx) > max_chars else ''}"
+        )
         print()
+
     print("(Full context was sent to the LLM.)")
     print("Answer: ")
+
+
+def generate_gemini_response(prompt):
+    try:
+        print("Model == GEMINI")
+
+        gemini_prompt = prompt + """
+Gemini-Specific Instructions:
+- Explain the answer as if you are speaking to someone with no legal background.
+- Use simple, everyday language instead of formal legal language.
+- After mentioning a legal provision or legal term, explain what it means in simple words.
+- Focus on explaining what the provision actually means in practical terms in relation to the user's question.
+- Avoid unnecessary legal jargon.
+- If a legal term is necessary, immediately explain it in simple words.
+- Use clear and practical examples whenever they help the user understand the provision.
+- Keep the response concise while still covering all relevant information from the Retrieved Context.
+"""
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=gemini_prompt
+        )
+
+        return response.text
+
+    except Exception as e:
+        print(
+            f"\nGemini failed:\n{e}"
+        )
+        raise
+
+
+def generate_groq_response(prompt):
+    try:
+        print("Model == GROQ")
+
+        groq_prompt = prompt + """
+Groq-Specific Instructions:
+- Explain the answer as if you are speaking to someone with no legal background.
+- Use simple, everyday language instead of formal legal language.
+- After mentioning a legal provision or legal term, explain what it means in simple words.
+- Focus on explaining what the provision actually means in practical terms in relation to the user's question.
+- Avoid unnecessary legal jargon.
+- If a legal term is necessary, immediately explain it in simple words.
+- Use clear and practical examples whenever they help the user understand the provision.
+- Keep the response concise while still covering all relevant information from the Retrieved Context.
+"""
+
+        response = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": groq_prompt
+                }
+            ]
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        print(
+            f"\nGroq fallback failed: {e}"
+        )
+        raise
+
 
 def generate_response(query, contexts, history):
     try:
         prompt = build_prompt(query, contexts, history)
 
-        # Display-only preview — full context still goes to the LLM
-        print_prompt_preview(query, contexts, history, max_chars=200)
+        print_prompt_preview(
+            query,
+            contexts,
+            history,
+            max_chars=200
+        )
 
         if LLM_PROVIDER == "ollama":
+            print("Model == OLLAMA")
 
             ollama_prompt = prompt + """
-
 Ollama-Specific Instructions:
 - Provide a longer and more detailed response while remaining accurate and grounded in the Retrieved Context.
 """
@@ -128,38 +223,34 @@ Ollama-Specific Instructions:
                 ]
             )
 
-        elif LLM_PROVIDER == "gemini":
+            return response["message"]["content"]
 
-            gemini_prompt = prompt + """
+        elif LLM_PROVIDER == GEMINI:
 
-Gemini-Specific Instructions:
-- Explain the answer as if you are speaking to someone with no legal background.
-- Use simple, everyday language instead of formal legal language.
-- After mentioning a legal provision or legal term, explain what it means in simple words.
-- Focus on explaining what the provision actually means in practical terms in relation to the user's question.
-- Avoid unnecessary legal jargon.
-- If a legal term is necessary, immediately explain it in simple words.
-- Use clear and practical examples whenever they help the user understand the provision.
-- Keep the response concise while still covering all relevant information from the Retrieved Context.
-"""
+            try:
+                return generate_gemini_response(prompt)
 
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=gemini_prompt
-            )
+            except Exception as e:
+                print(
+                    f"\nGemini unavailable. Switching to Groq.\n"
+                    f"Gemini error: {e}\n"
+                )
 
-            return response.text
+                return generate_groq_response(prompt)
+
+        elif LLM_PROVIDER == GROQ:
+            return generate_groq_response(prompt)
 
         else:
             raise ValueError(
-                f"Unsupported LLM provider(generate_response[llm.py]): {LLM_PROVIDER}"
+                f"Unsupported LLM provider(generate_response[llm.py]): "
+                f"{LLM_PROVIDER}"
             )
-
-        return response["message"]["content"]
 
     except KeyError as e:
         print(
-            "\nMissing required field in Ollama response(generate_response[llm.py]): \n",
+            "\nMissing required field in LLM response"
+            "(generate_response[llm.py]): \n",
             e
         )
         raise
@@ -170,46 +261,3 @@ Gemini-Specific Instructions:
             e
         )
         raise
-
-""""
-Format of response object:
-{
-    "model": "llama3.1",
-    "created_at": "...",
-    "message": {
-        "role": "assistant",
-        "content": "Article 21 protects life and personal liberty."
-    },
-    "done": True
-}
-"""
-
-def main():
-    query = "What fundamental rights protect me against unlawful arrest?"
-
-    contexts = [
-        "Article 21: No person shall be deprived of his life or personal liberty except according to procedure established by law.",
-        "Article 22: Provides safeguards against arbitrary arrest and detention.",
-        "Article 21: No person shall be deprived of his life or personal liberty except according to procedure established by law.",
-        "Article 22: Provides safeguards against arbitrary arrest and detention.",
-        "Article 21: No person shall be deprived of his life or personal liberty except according to procedure established by law.",
-    ]
-
-    history = """
-User: What is Article 21?
-Assistant: Article 21 guarantees protection of life and personal liberty.
-"""
-
-    print("========== GENERATED PROMPT ==========\n")
-
-    prompt = build_prompt(query, contexts, history)
-    # print(prompt)
-
-    print("\n========== LLM RESPONSE ==========\n")
-
-    response = generate_response(query, contexts, history)
-    print(response)
-
-
-if __name__ == "__main__":
-    main()
