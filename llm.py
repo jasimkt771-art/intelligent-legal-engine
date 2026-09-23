@@ -161,7 +161,7 @@ Gemini-Specific Instructions:
 
 def generate_groq_response(prompt):
     try:
-        print("Model == GROQ")
+        print("\nModel == GROQ")
 
         groq_prompt = prompt + """
 Groq-Specific Instructions:
@@ -189,7 +189,7 @@ Groq-Specific Instructions:
 
     except Exception as e:
         print(
-            f"\nGroq fallback failed: {e}"
+            f"\nGroq failed:\n{e}"
         )
         raise
 
@@ -225,21 +225,21 @@ Ollama-Specific Instructions:
 
             return response["message"]["content"]
 
-        elif LLM_PROVIDER == GEMINI:
+        elif LLM_PROVIDER == GROQ:
 
             try:
-                return generate_gemini_response(prompt)
+                return generate_groq_response(prompt)
 
             except Exception as e:
                 print(
-                    f"\nGemini unavailable. Switching to Groq.\n"
-                    f"Gemini error: {e}\n"
+                    f"\nGroq unavailable. Switching to Gemini.\n"
+                    f"Groq error: {e}\n"
                 )
 
-                return generate_groq_response(prompt)
+                return generate_gemini_response(prompt)
 
-        elif LLM_PROVIDER == GROQ:
-            return generate_groq_response(prompt)
+        elif LLM_PROVIDER == GEMINI:
+            return generate_gemini_response(prompt)
 
         else:
             raise ValueError(

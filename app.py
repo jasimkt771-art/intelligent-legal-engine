@@ -209,12 +209,12 @@ def render_sidebar():
     with st.sidebar:
         st.header("Chats")
 
-        if st.button("+ New Chat", use_container_width=True):
+        if st.button("+ New Chat"):
             new_chat_clicked = True
 
         st.divider()
 
-        st.markdown("<h2 style='margin-top: -10px; margin-bottom: 25px; font-size: 28px;'>Previous Chats</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='margin-top: -25px; margin-bottom: 20px; font-size: 28px;'>Previous Chats</h2>", unsafe_allow_html=True)
 
         try:
             sessions = get_recent_sessions(limit=5)
@@ -255,7 +255,7 @@ def main():
 
         elif selected_session:
             st.session_state.session_id = selected_session
-            print("\n=======Session Selected======")
+            print("\n\n=======Session Selected======")
             print("Selected Session id:", st.session_state.session_id)
             st.rerun()
 

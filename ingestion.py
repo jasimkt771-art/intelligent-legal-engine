@@ -142,7 +142,7 @@ def upsert_to_pinecone(hybrid_vectors):
             records.append(record)
 
         # Upload records to Pinecone
-        #index.upsert(vectors=records)
+        index.upsert(vectors=records)
 
         print(f"Successfully uploaded {len(records)} records.")
 

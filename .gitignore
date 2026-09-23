@@ -5,9 +5,9 @@ __pycache__/
 # Virtual environments
 venv/
 .venv/
+.venv-deploy/
 
 # Local secrets
-config.py
 .env
 
 # IDE files

@@ -5,6 +5,8 @@ from sentence_transformers import SentenceTransformer
 from config import (
     REDIS_HOST,
     REDIS_PORT,
+    REDIS_USERNAME,
+    REDIS_PASSWORD,
     REDIS_DB,
     PINECONE_API_KEY,
     PINECONE_INDEX_NAME2,
@@ -28,6 +30,9 @@ def connect_to_redis():
             redis_client = redis.Redis(
                 host=REDIS_HOST,
                 port=REDIS_PORT,
+                db=REDIS_DB,
+                username=REDIS_USERNAME,
+                password=REDIS_PASSWORD,
                 decode_responses=True
             )
 
@@ -45,9 +50,7 @@ def connect_to_semantic_cache():
         if semantic_cache_index is None:
             pc = Pinecone(api_key=PINECONE_API_KEY)
 
-            semantic_cache_index = pc.Index(
-                PINECONE_INDEX_NAME2
-            )
+            semantic_cache_index = pc.Index(PINECONE_INDEX_NAME2)
 
         return semantic_cache_index
 
