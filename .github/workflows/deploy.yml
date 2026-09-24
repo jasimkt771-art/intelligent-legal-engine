@@ -44,7 +44,7 @@ jobs:
         run: |
           gcloud run deploy legal-engine \
             --image asia-south1-docker.pkg.dev/intelligent-legal-engine/legal-engine/legal-engine:${{ github.sha }} \
-            --region asia-south1 \
+            --region asia-southeast1 \
             --platform managed \
             --service-account 421655480718-compute@developer.gserviceaccount.com \
             --allow-unauthenticated \
