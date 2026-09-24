@@ -1,0 +1,52 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-south1-docker.pkg.dev
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t asia-south1-docker.pkg.dev/intelligent-legal-engine/legal-engine/legal-engine:${{ github.sha }} \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push \
+            asia-south1-docker.pkg.dev/intelligent-legal-engine/legal-engine/legal-engine:${{ github.sha }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy legal-engine \
+            --image asia-south1-docker.pkg.dev/intelligent-legal-engine/legal-engine/legal-engine:${{ github.sha }} \
+            --region asia-south1 \
+            --platform managed \
+            --service-account 421655480718-compute@developer.gserviceaccount.com \
+            --allow-unauthenticated \
+            --set-env-vars "SUPABASE_URL=https://bqhxwszvmvhfwwihfgkf.supabase.co,REDIS_HOST=account-nurturing-glistening-52519.db.redis.io,REDIS_PORT=17044,REDIS_DB=0,REDIS_USERNAME=default" \
+            --set-secrets "PINECONE_API_KEY=PINECONE_API_KEY:latest,COHERE_API_KEY=COHERE_API_KEY:latest,SUPABASE_KEY=SUPABASE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,GROQ_API_KEY=GROQ_API_KEY:latest,REDIS_PASSWORD=REDIS_PASSWORD:latest"
