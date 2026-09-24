@@ -59,52 +59,66 @@ def is_follow_up_query(query, has_history):
 
     follow_up_patterns = [
         # References / what they said
-        "what about", "how about", "what about that", "what about this", "what about it", "how about that",
-        "how about this", "how about it", "what you said", "what you mentioned", "as you mentioned", "as you said",
-        "you mentioned earlier", "you said earlier",
+        "what about that", "what about this", "what about it", "how about that",
+        "how about this", "how about it", "what you said", "what you mentioned",
+        "as you mentioned", "as you said", "you mentioned earlier", "you said earlier",
 
         # Meaning / significance
-        "what does that mean", "what does this mean", "what does it mean", "what did that mean", "what did this mean",
-        "what did it mean", "what is the significance", "what's the significance", "what is its significance",
-        "what's its significance", "why is that significant", "why is this significant", "what does it signify",
-        "what does that signify", "what does this signify",
+        "what does that mean", "what does this mean", "what does it mean",
+        "what did that mean", "what did this mean", "what did it mean",
+        "what is its significance", "what's its significance",
+        "why is that significant", "why is this significant",
+        "what does it signify", "what does that signify", "what does this signify",
+        "what does that actually mean", "what exactly did you mean by that",
+        "what exactly did you mean",
 
         # Explanation / clarification
-        "explain that", "explain this", "explain it", "explain simply", "explain again", "explain the above",
-        "explain the previous", "explain what you mean", "explain that again", "can you explain that",
-        "can you explain this", "can you explain it", "can you clarify", "clarify that", "clarify this", "clarify it",
-        "can you elaborate", "elaborate on that", "elaborate on this",
+        "explain that", "explain this", "explain it", "explain simply", "explain again",
+        "explain the above", "explain the previous", "explain what you mean",
+        "explain that again", "can you explain that", "can you explain this",
+        "can you explain it", "can you clarify", "clarify that", "clarify this",
+        "clarify it", "can you elaborate", "elaborate on that", "elaborate on this",
+        "can you expand on that", "can you explain what you just said",
 
         # Previous answer / previous point
-        "the previous answer", "the previous point", "the previous one", "the previous", "the above",
-        "the above answer", "the above point", "the above one", "what you said earlier", "what you mentioned earlier",
+        "the previous answer", "the previous point", "the previous one", "the previous",
+        "the above", "the above answer", "the above point", "the above one",
+        "what you said earlier", "what you mentioned earlier",
 
         # More details
-        "tell me more", "tell me more about", "more about that", "more about this", "more about it",
-        "can you tell me more", "give me more details", "explain further", "go into more detail", "go deeper",
-        "what else", "anything else about that", "anything else about this",
+        "tell me more about that", "tell me more about this", "tell me more about it",
+        "more about that", "more about this", "more about it",
+        "can you tell me more about that", "can you tell me more about this",
+        "give me more details about that", "give me more details about this",
+        "explain further", "go into more detail about that", "go into more detail about this",
+        "anything else about that", "anything else about this",
 
         # Application / consequences
-        "what happens", "what happens then", "what happens after that", "what happens next", "what does that do",
-        "what does this do", "how does that work", "how does this work", "how does it work", "how does that apply",
-        "how does this apply", "does that apply", "does this apply", "does it apply", "why does that matter",
-        "why does this matter", "why does it matter",
+        "what happens after that", "what happens next", "what does that do",
+        "what does this do", "how does that work", "how does this work",
+        "how does it work", "how does that apply", "how does this apply",
+        "does that apply", "does this apply", "does it apply",
+        "why does that matter", "why does this matter", "why does it matter",
+        "what exactly were you referring to",
 
         # Comparisons / differences
-        "compare that", "compare this", "compare it", "compare the above", "compare the previous",
-        "how is that different", "how is this different", "what is the difference", "what's the difference",
+        "compare that", "compare this", "compare it", "compare the above",
+        "compare the previous", "how is that different", "how is this different",
 
         # Reasoning / why
-        "why did you say", "why did you mention", "why is that", "why is this", "why is it", "why does that",
-        "why does this", "why would that", "why would this", "how did you get that", "how did you reach that",
+        "why did you say", "why did you mention", "why is that", "why is this",
+        "why is it", "why does that", "why does this", "why would that",
+        "why would this", "how did you get that", "how did you reach that",
 
         # References to context
-        "based on that", "based on this", "based on what you said", "according to that", "according to this",
-        "from that", "from this", "then what", "and then", "and what about", "so what does that mean",
+        "based on that", "based on this", "based on what you said",
+        "according to that", "according to this", "from that", "from this",
+        "then what", "and what about", "so what does that mean",
         "so what does this mean",
 
         # Informal / conversational
-        "what do u mean", "what do you mean", "what did you mean", "what are you saying", "what are you referring to"
+        "what do u mean", "what do you mean", "what did you mean",
+        "what are you saying", "what are you referring to"
     ]
 
     normalized_query = query.lower().strip()
