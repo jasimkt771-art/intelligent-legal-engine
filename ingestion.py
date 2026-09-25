@@ -9,6 +9,10 @@ from pinecone import Pinecone
 from config import PINECONE_API_KEY, PINECONE_INDEX_NAME1
 
 
+# Offline ingestion pipeline:
+# PDF → Articles → Dense + Sparse vectors → Pinecone
+
+
 def extract_text_from_pdf(pdf_path):
     try:
         doc = PdfReader(pdf_path)
@@ -37,6 +41,7 @@ def extract_articles(text):
         if not isinstance(text, str):
             raise TypeError("Text must be a string.")
 
+        # Match Article headings at the beginning of a line.
         pattern = r'(?m)^Article\s+\d+[A-Z]*'
         matches = list(re.finditer(pattern, text))
 
@@ -47,7 +52,6 @@ def extract_articles(text):
 
         for i in range(len(matches)):
             start = matches[i].start()
-
             end = (
                 matches[i + 1].start()
                 if i + 1 < len(matches)
@@ -64,6 +68,10 @@ def extract_articles(text):
 
 
 def generate_hybrid_vectors(articles):
+    """
+    Generate dense semantic vectors and sparse BM25 vectors
+    for each Article.
+    """
     try:
         if not isinstance(articles, list):
             raise TypeError("Articles must be a list.")
@@ -72,28 +80,20 @@ def generate_hybrid_vectors(articles):
             if not isinstance(article, str):
                 raise TypeError("Every article must be a string.")
 
-        # Load the embedding model
         model = SentenceTransformer("all-MiniLM-L6-v2")
 
-        # Create the BM25 encoder
         bm25 = BM25Encoder()
-
-        # Train BM25 on all articles
         bm25.fit(articles)
+
+        # Save the fitted BM25 model for use during online retrieval.
         bm25.dump("bm25.json")
 
         hybrid_vectors = []
 
-        # Process each article
         for article in articles:
-
-            # Generate dense embedding
             dense_vector = model.encode(article)
-
-            # Generate sparse embedding
             sparse_vector = bm25.encode_documents(article)
 
-            # Store everything together
             hybrid_vectors.append({
                 "text": article,
                 "dense_vector": dense_vector.tolist(),
@@ -112,6 +112,10 @@ def generate_hybrid_vectors(articles):
 
 
 def upsert_to_pinecone(hybrid_vectors):
+    """
+    Upload hybrid vectors to Pinecone with the original
+    Article text stored as metadata.
+    """
     try:
         if not isinstance(hybrid_vectors, list):
             raise TypeError("Hybrid vectors must be a list.")
@@ -119,29 +123,21 @@ def upsert_to_pinecone(hybrid_vectors):
         if not hybrid_vectors:
             raise ValueError("Hybrid vectors list cannot be empty.")
 
-        # Connect to Pinecone
         pc = Pinecone(api_key=PINECONE_API_KEY)
-
-        # Connect to your index
         index = pc.Index(PINECONE_INDEX_NAME1)
 
         records = []
 
-        # Convert each hybrid vector into a Pinecone record
         for item in hybrid_vectors:
-
-            record = {
+            records.append({
                 "id": str(uuid.uuid4()),
                 "values": item["dense_vector"],
                 "sparse_values": item["sparse_vector"],
                 "metadata": {
                     "text": item["text"]
                 }
-            }
+            })
 
-            records.append(record)
-
-        # Upload records to Pinecone
         index.upsert(vectors=records)
 
         print(f"Successfully uploaded {len(records)} records.")
@@ -171,33 +167,22 @@ def main():
     print("\n--- Testing complete ingestion pipeline ---")
 
     try:
-        # Step 1: Extract text from PDF
         text = extract_text_from_pdf(pdf_path)
-
         print(f"Extracted text length: {len(text)} characters")
 
-        # Step 2: Extract Articles
         articles = extract_articles(text)
-
         print(f"Extracted {len(articles)} articles")
 
-        """for i, article in enumerate(articles):
-            print(article)"""
-
-        # Step 3: Generate hybrid vectors
         hybrid_vectors = generate_hybrid_vectors(articles)
-
         print(f"Generated {len(hybrid_vectors)} hybrid vectors")
 
         for i, vector in enumerate(hybrid_vectors, start=1):
-            print(f'Article {i}')
+            print(f"Article {i}")
             print(f'\nDense Vector:\n{vector["dense_vector"][:5]}')
             print(f'\nSparse Vector:\n{vector["sparse_vector"]}')
             print(vector["text"][:100])
 
-        # Step 4: Upload vectors to Pinecone
         result = upsert_to_pinecone(hybrid_vectors)
-
         print(f"Pinecone upload result: {result}")
 
         print("\n--- Ingestion pipeline completed successfully ---")

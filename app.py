@@ -8,6 +8,10 @@ from cache import connect_to_cache, check_cache, save_to_cache, clear_cache
 from llm import generate_response
 
 
+# Main Streamlit application.
+# Handles the user interface, conversation flow, memory, caching, retrieval, and LLM response generation.
+
+
 def initialize_connections():
     try:
         redis_client, cache_index = connect_to_cache()
@@ -195,6 +199,7 @@ def process_query(query, session_id, redis_client, cache_index):
         has_history = bool(history.strip())
         is_follow_up = is_follow_up_query(query, has_history)
 
+        # Follow-up queries bypass the global cache because their meaning depends on conversation history.
         if not is_follow_up:
             print("\nQuery is not a follow-up, checking cache\n")
             response = check_cache(redis_client, cache_index, query)
@@ -204,6 +209,7 @@ def process_query(query, session_id, redis_client, cache_index):
                 return response
 
         if is_follow_up:
+            # Add the previous conversation to the retrieval query so references like "that" can be resolved.
             retrieval_query = build_retrieval_query(query, history)
         else:
             retrieval_query = query
@@ -223,6 +229,7 @@ def process_query(query, session_id, redis_client, cache_index):
                     print("\nQuery is not a follow-up\nSaving to cache\n")
                     save_to_cache(redis_client, cache_index, query, response)
                 else:
+                    # Avoid caching follow-ups because their meaning depends on conversation history.
                     print("\nQuery is a follow-up, so its not being saved to cache\n")
 
             except Exception as e:

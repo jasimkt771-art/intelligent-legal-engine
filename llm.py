@@ -14,6 +14,10 @@ from config import (
 )
 
 
+# Handles LLM response generation.
+# Supports Ollama for local development, Groq as the primary production provider, and Gemini as a fallback.
+
+
 # Gemini client
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -231,6 +235,7 @@ Ollama-Specific Instructions:
                 return generate_groq_response(prompt)
 
             except Exception as e:
+                # Use Gemini as a fallback if the primary Groq request fails.
                 print(
                     f"\nGroq unavailable. Switching to Gemini.\n"
                     f"Groq error: {e}\n"

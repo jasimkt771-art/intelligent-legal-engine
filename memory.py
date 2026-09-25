@@ -1,8 +1,15 @@
 import supabase
 from supabase import create_client
+
 from config import SUPABASE_URL, SUPABASE_KEY
 
+
+# Handles persistent conversation memory using Supabase.
+# Stores, retrieves, and formats chat history so conversations can maintain context.
+
+
 def connect_to_supabase():
+    # Create a client for communicating with the Supabase database.
     try:
         client = create_client(
             SUPABASE_URL,
@@ -16,6 +23,7 @@ def connect_to_supabase():
 
 
 def fetch_history(session_id):
+    # Retrieve the five most recent messages from a conversation.
     try:
         if not isinstance(session_id, str):
             raise TypeError("Session ID must be a string.")
@@ -52,6 +60,7 @@ def fetch_history(session_id):
 
 
 def get_recent_sessions(limit=5):
+    # Retrieve the most recently active conversation sessions.
     try:
         if not isinstance(limit, int):
             raise TypeError("Limit must be an integer.")
@@ -118,6 +127,7 @@ def get_recent_sessions(limit=5):
 
 
 def fetch_session_messages(session_id):
+    # Retrieve every message belonging to a specific conversation.
     try:
         if not isinstance(session_id, str):
             raise TypeError("Session ID must be a string.")
@@ -153,6 +163,7 @@ def fetch_session_messages(session_id):
 
 
 def save_turn(session_id, user_query, bot_response):
+    # Save one user query and its response to the conversation history.
     try:
         if not isinstance(session_id, str):
             raise TypeError("Session ID must be a string.")
@@ -187,6 +198,7 @@ def save_turn(session_id, user_query, bot_response):
 
 
 def format_history(history):
+    # Convert database records into the conversation format used by the LLM.
     try:
         if not isinstance(history, list):
             raise TypeError("History must be a list.")
@@ -194,6 +206,7 @@ def format_history(history):
         if not history:
             return ""
 
+        # Database results are newest-first, so reverse them for chronological context.
         history = list(reversed(history))
 
         formatted_history = ""
@@ -230,6 +243,7 @@ def format_history(history):
 
 
 def get_memory(session_id):
+    # Retrieve and format conversation history for use as LLM context.
     try:
         history = fetch_history(session_id)
 
@@ -238,6 +252,7 @@ def get_memory(session_id):
         return formatted_history
 
     except supabase.SupabaseException as e:
+        # Memory is optional, so continue without it if Supabase is unavailable.
         print(
             f"Supabase unavailable, continuing without memory"
             f"(get_memory[memory.py]): \n{e}"
@@ -253,6 +268,7 @@ def get_memory(session_id):
 
 
 def main():
+    # Run a simple local test of the conversation memory functions.
     session_id = "test_session"
 
     save_turn(

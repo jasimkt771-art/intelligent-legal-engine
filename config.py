@@ -1,3 +1,5 @@
+from urllib.request import localhost
+
 from dotenv import load_dotenv
 import os
 
@@ -22,7 +24,8 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_LOCAL_HOST = "localhost"
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 REDIS_USERNAME = os.getenv("REDIS_USERNAME")

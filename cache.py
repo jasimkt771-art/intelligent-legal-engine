@@ -11,12 +11,15 @@ from config import (
     PINECONE_API_KEY,
     PINECONE_INDEX_NAME2,
     SEMANTIC_CACHE_THRESHOLD,
-    REDIS_CACHE_TTL
+    REDIS_CACHE_TTL,
+    REDIS_LOCAL_HOST
 )
 import re
 
+# Handles exact and semantic response caching.
+# Uses Redis for exact matches and Pinecone for semantically similar queries.
 
-#Loading the models
+# Exact cache uses Redis; semantic cache uses a separate Pinecone index.
 embedding_model = None
 redis_client = None
 semantic_cache_index = None
@@ -28,7 +31,7 @@ def connect_to_redis():
     try:
         if redis_client is None:
             redis_client = redis.Redis(
-                host=REDIS_HOST,
+                host=REDIS_LOCAL_HOST,
                 port=REDIS_PORT,
                 db=REDIS_DB,
                 username=REDIS_USERNAME,
@@ -85,6 +88,7 @@ def connect_to_cache():
 
 def embed_query(query):
     global embedding_model
+
     try:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("Query must be a non-empty string.")
@@ -200,6 +204,8 @@ def check_semantic_cache(cache_index, query):
             print("Query article:", query_article)
             print("Cached article:", cached_article)
 
+            # Prevent semantically similar queries about different Articles
+            # from returning the wrong cached response.
             if query_article and cached_article:
                 if query_article != cached_article:
                     return None
@@ -314,6 +320,7 @@ def check_cache(redis_client, cache_index, query):
         if not isinstance(query, str):
             raise TypeError("Query must be a string.")
 
+        # Check exact matches first because they are cheaper and unambiguous.
         response = check_exact_cache(redis_client, query)
 
         print("Checked redis")
@@ -378,22 +385,44 @@ def save_to_cache(redis_client, cache_index, query, response):
 
 
 def clear_cache(redis_client, cache_index):
+    # Clear the local Redis cache.
     try:
         if redis_client is not None:
             redis_client.flushdb()
-            print("Redis cleared.")
+            print("Local Redis cleared.")
         else:
             print(
-                "Redis cache unavailable. "
-                "Skipping Redis clear."
+                "Local Redis unavailable. "
+                "Skipping local Redis clear."
             )
 
     except redis.ConnectionError as e:
         print(
-            f"Redis connection error while clearing cache"
+            f"Redis connection error while clearing local cache"
             f"(clear_cache[cache.py]): \n{e}"
         )
 
+    # Clear the Redis Cloud cache.
+    try:
+        redis_cloud_client = redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            db=REDIS_DB,
+            username=REDIS_USERNAME,
+            password=REDIS_PASSWORD,
+            decode_responses=True
+        )
+
+        redis_cloud_client.flushdb()
+        print("Redis Cloud cleared.")
+
+    except redis.ConnectionError as e:
+        print(
+            f"Redis connection error while clearing Redis Cloud"
+            f"(clear_cache[cache.py]): \n{e}"
+        )
+
+    # Clear the Pinecone semantic cache.
     try:
         if cache_index is not None:
             cache_index.delete(delete_all=True, namespace="")
@@ -409,7 +438,7 @@ def clear_cache(redis_client, cache_index):
             print("Semantic cache already empty.")
         else:
             print(
-                f"Error clearing semantic/redis cache"
+                f"Error clearing semantic cache"
                 f"(clear_cache[cache.py]): \n{e}"
             )
             raise
