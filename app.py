@@ -196,6 +196,8 @@ def process_query(query, session_id, redis_client, cache_index):
 
             if response:
                 print(f"\nCached\nQuery:\n{query}\n\nWITH\n\nResponse:\n{response}\n\n")
+                print(f'Saving response to database chat_history with session_id: {session_id}')
+                save_turn(session_id, query, response)
                 return response
 
         if is_follow_up:
