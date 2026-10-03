@@ -10,7 +10,7 @@ from config import (
     GROQ_API_KEY,
     GROQ_MODEL,
     GEMINI,
-    GROQ
+    GROQ,
 )
 
 
@@ -103,16 +103,11 @@ Answer:
         return prompt
 
     except TypeError as e:
-        print(
-            '\nInvalid input for prompt construction(build_prompt[llm.py]): \n',
-            e
-        )
+        print("\nInvalid input for prompt construction(build_prompt[llm.py]): \n", e)
         raise
 
     except Exception as e:
-        print(
-            f"\nError building prompt(build_prompt[llm.py]): \n{e}"
-        )
+        print(f"\nError building prompt(build_prompt[llm.py]): \n{e}")
         raise
 
 
@@ -123,10 +118,7 @@ def print_prompt_preview(query, contexts, history, max_chars=100):
     print("Retrieved Context (truncated for display):")
 
     for i, ctx in enumerate(contexts, start=1):
-        print(
-            f"{ctx[:max_chars]}"
-            f"{'...' if len(ctx) > max_chars else ''}"
-        )
+        print(f"{ctx[:max_chars]}{'...' if len(ctx) > max_chars else ''}")
         print()
 
     print("(Full context was sent to the LLM.)")
@@ -137,7 +129,9 @@ def generate_gemini_response(prompt):
     try:
         print("Model == GEMINI")
 
-        gemini_prompt = prompt + """
+        gemini_prompt = (
+            prompt
+            + """
 Gemini-Specific Instructions:
 - Explain the answer as if you are speaking to someone with no legal background.
 - Use simple, everyday language instead of formal legal language.
@@ -148,18 +142,16 @@ Gemini-Specific Instructions:
 - Use clear and practical examples whenever they help the user understand the provision.
 - Keep the response concise while still covering all relevant information from the Retrieved Context.
 """
+        )
 
         response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=gemini_prompt
+            model=GEMINI_MODEL, contents=gemini_prompt
         )
 
         return response.text
 
     except Exception as e:
-        print(
-            f"\nGemini failed:\n{e}"
-        )
+        print(f"\nGemini failed:\n{e}")
         raise
 
 
@@ -167,7 +159,9 @@ def generate_groq_response(prompt):
     try:
         print("\nModel == GROQ")
 
-        groq_prompt = prompt + """
+        groq_prompt = (
+            prompt
+            + """
 Groq-Specific Instructions:
 - Explain the answer as if you are speaking to someone with no legal background.
 - Use simple, everyday language instead of formal legal language.
@@ -178,23 +172,16 @@ Groq-Specific Instructions:
 - Use clear and practical examples whenever they help the user understand the provision.
 - Keep the response concise while still covering all relevant information from the Retrieved Context.
 """
+        )
 
         response = groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": groq_prompt
-                }
-            ]
+            model=GROQ_MODEL, messages=[{"role": "user", "content": groq_prompt}]
         )
 
         return response.choices[0].message.content
 
     except Exception as e:
-        print(
-            f"\nGroq failed:\n{e}"
-        )
+        print(f"\nGroq failed:\n{e}")
         raise
 
 
@@ -202,44 +189,33 @@ def generate_response(query, contexts, history):
     try:
         prompt = build_prompt(query, contexts, history)
 
-        print_prompt_preview(
-            query,
-            contexts,
-            history,
-            max_chars=200
-        )
+        print_prompt_preview(query, contexts, history, max_chars=200)
 
         if LLM_PROVIDER == "ollama":
             print("Model == OLLAMA")
 
-            ollama_prompt = prompt + """
+            ollama_prompt = (
+                prompt
+                + """
 Ollama-Specific Instructions:
 - Provide a longer and more detailed response while remaining accurate and grounded in the Retrieved Context.
 """
+            )
 
             response = ollama.chat(
                 model=OLLAMA_MODEL,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": ollama_prompt
-                    }
-                ]
+                messages=[{"role": "user", "content": ollama_prompt}],
             )
 
             return response["message"]["content"]
 
         elif LLM_PROVIDER == GROQ:
-
             try:
                 return generate_groq_response(prompt)
 
             except Exception as e:
                 # Use Gemini as a fallback if the primary Groq request fails.
-                print(
-                    f"\nGroq unavailable. Switching to Gemini.\n"
-                    f"Groq error: {e}\n"
-                )
+                print(f"\nGroq unavailable. Switching to Gemini.\nGroq error: {e}\n")
 
                 return generate_gemini_response(prompt)
 
@@ -248,21 +224,15 @@ Ollama-Specific Instructions:
 
         else:
             raise ValueError(
-                f"Unsupported LLM provider(generate_response[llm.py]): "
-                f"{LLM_PROVIDER}"
+                f"Unsupported LLM provider(generate_response[llm.py]): {LLM_PROVIDER}"
             )
 
     except KeyError as e:
         print(
-            "\nMissing required field in LLM response"
-            "(generate_response[llm.py]): \n",
-            e
+            "\nMissing required field in LLM response(generate_response[llm.py]): \n", e
         )
         raise
 
     except Exception as e:
-        print(
-            '\nError generating response(generate_response[llm.py]):\n',
-            e
-        )
+        print("\nError generating response(generate_response[llm.py]):\n", e)
         raise

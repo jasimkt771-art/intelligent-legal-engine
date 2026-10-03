@@ -11,10 +11,7 @@ from config import SUPABASE_URL, SUPABASE_KEY
 def connect_to_supabase():
     # Create a client for communicating with the Supabase database.
     try:
-        client = create_client(
-            SUPABASE_URL,
-            SUPABASE_KEY
-        )
+        client = create_client(SUPABASE_URL, SUPABASE_KEY)
         return client
 
     except Exception as e:
@@ -46,16 +43,12 @@ def fetch_history(session_id):
 
     except TypeError as e:
         print(
-            f"Invalid session ID for history retrieval"
-            f"(fetch_history[memory.py]): \n{e}"
+            f"Invalid session ID for history retrieval(fetch_history[memory.py]): \n{e}"
         )
         raise
 
     except Exception as e:
-        print(
-            f"Error fetching chat history"
-            f"(fetch_history[memory.py]): \n{e}"
-        )
+        print(f"Error fetching chat history(fetch_history[memory.py]): \n{e}")
         raise
 
 
@@ -89,7 +82,7 @@ def get_recent_sessions(limit=5):
                 sessions[session_id] = {
                     "session_id": session_id,
                     "first_query": row["user_query"],
-                    "latest_activity": row["created_at"]
+                    "latest_activity": row["created_at"],
                 }
 
             else:
@@ -98,8 +91,7 @@ def get_recent_sessions(limit=5):
         recent_sessions = list(sessions.values())
 
         recent_sessions.sort(
-            key=lambda session: session["latest_activity"],
-            reverse=True
+            key=lambda session: session["latest_activity"], reverse=True
         )
 
         return recent_sessions[:limit]
@@ -119,10 +111,7 @@ def get_recent_sessions(limit=5):
         raise
 
     except Exception as e:
-        print(
-            f"Error fetching recent sessions"
-            f"(get_recent_sessions[memory.py]): \n{e}"
-        )
+        print(f"Error fetching recent sessions(get_recent_sessions[memory.py]): \n{e}")
         raise
 
 
@@ -156,8 +145,7 @@ def fetch_session_messages(session_id):
 
     except Exception as e:
         print(
-            f"Error fetching session messages"
-            f"(fetch_session_messages[memory.py]): \n{e}"
+            f"Error fetching session messages(fetch_session_messages[memory.py]): \n{e}"
         )
         raise
 
@@ -176,24 +164,20 @@ def save_turn(session_id, user_query, bot_response):
 
         client = connect_to_supabase()
 
-        client.table("chat_history").insert({
-            "session_id": session_id,
-            "user_query": user_query,
-            "bot_response": bot_response
-        }).execute()
+        client.table("chat_history").insert(
+            {
+                "session_id": session_id,
+                "user_query": user_query,
+                "bot_response": bot_response,
+            }
+        ).execute()
 
     except TypeError as e:
-        print(
-            f"Invalid input for saving chat turn"
-            f"(save_turn[memory.py]): \n{e}"
-        )
+        print(f"Invalid input for saving chat turn(save_turn[memory.py]): \n{e}")
         raise
 
     except Exception as e:
-        print(
-            f"Error saving chat turn"
-            f"(save_turn[memory.py]): \n{e}"
-        )
+        print(f"Error saving chat turn(save_turn[memory.py]): \n{e}")
         raise
 
 
@@ -220,25 +204,16 @@ def format_history(history):
                 print(f"Missing required history field: \n{e}")
                 raise
 
-            formatted_history += (
-                f"User: {user_query}\n"
-                f"Assistant: {bot_response}\n\n"
-            )
+            formatted_history += f"User: {user_query}\nAssistant: {bot_response}\n\n"
 
         return formatted_history
 
     except TypeError as e:
-        print(
-            f"Invalid history input"
-            f"(format_history[memory.py]): \n{e}"
-        )
+        print(f"Invalid history input(format_history[memory.py]): \n{e}")
         raise
 
     except Exception as e:
-        print(
-            f"Error formatting chat history"
-            f"(format_history[memory.py]): \n{e}"
-        )
+        print(f"Error formatting chat history(format_history[memory.py]): \n{e}")
         raise
 
 
@@ -257,13 +232,10 @@ def get_memory(session_id):
             f"Supabase unavailable, continuing without memory"
             f"(get_memory[memory.py]): \n{e}"
         )
-        return ''
+        return ""
 
     except Exception as e:
-        print(
-            f"Error getting memory"
-            f"(get_memory[memory.py]): \n{e}"
-        )
+        print(f"Error getting memory(get_memory[memory.py]): \n{e}")
         raise
 
 
@@ -272,15 +244,11 @@ def main():
     session_id = "test_session"
 
     save_turn(
-        session_id,
-        "What is Article 21?",
-        "Article 21 protects the right to life."
+        session_id, "What is Article 21?", "Article 21 protects the right to life."
     )
 
     save_turn(
-        session_id,
-        "Explain Article 19.",
-        "Article 19 guarantees several freedoms."
+        session_id, "Explain Article 19.", "Article 19 guarantees several freedoms."
     )
 
     history = fetch_history(session_id)

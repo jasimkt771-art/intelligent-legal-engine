@@ -1,5 +1,3 @@
-from urllib.request import localhost
-
 from dotenv import load_dotenv
 import os
 

@@ -12,7 +12,7 @@ from config import (
     PINECONE_INDEX_NAME2,
     SEMANTIC_CACHE_THRESHOLD,
     REDIS_CACHE_TTL,
-    REDIS_LOCAL_HOST
+    REDIS_LOCAL_HOST,
 )
 import re
 
@@ -36,7 +36,7 @@ def connect_to_redis():
                 db=REDIS_DB,
                 username=REDIS_USERNAME,
                 password=REDIS_PASSWORD,
-                decode_responses=True
+                decode_responses=True,
             )
 
         return redis_client
@@ -67,20 +67,14 @@ def connect_to_cache():
         redis_client = connect_to_redis()
 
     except Exception as e:
-        print(
-            f"Redis cache unavailable"
-            f"(connect_to_cache[cache.py]): \n{e}"
-        )
+        print(f"Redis cache unavailable(connect_to_cache[cache.py]): \n{e}")
         redis_client = None
 
     try:
         semantic = connect_to_semantic_cache()
 
     except Exception as e:
-        print(
-            f"Semantic cache unavailable"
-            f"(connect_to_cache[cache.py]): \n{e}"
-        )
+        print(f"Semantic cache unavailable(connect_to_cache[cache.py]): \n{e}")
         semantic = None
 
     return redis_client, semantic
@@ -117,10 +111,7 @@ def check_exact_cache(redis_client, query):
         return redis_client.get(query)
 
     except TypeError as e:
-        print(
-            f"Invalid query"
-            f"(check_exact_cache[cache.py]): \n{e}"
-        )
+        print(f"Invalid query(check_exact_cache[cache.py]): \n{e}")
         raise
 
     except redis.ConnectionError as e:
@@ -131,10 +122,7 @@ def check_exact_cache(redis_client, query):
         return None
 
     except Exception as e:
-        print(
-            f"Error checking exact cache"
-            f"(check_exact_cache[cache.py]): \n{e}"
-        )
+        print(f"Error checking exact cache(check_exact_cache[cache.py]): \n{e}")
         raise
 
 
@@ -143,11 +131,7 @@ def extract_article_number(query):
         if not isinstance(query, str):
             raise TypeError("Query must be a string.")
 
-        match = re.search(
-            r'\bArticle\s+(\d+[A-Za-z]*)\b',
-            query,
-            re.IGNORECASE
-        )
+        match = re.search(r"\bArticle\s+(\d+[A-Za-z]*)\b", query, re.IGNORECASE)
 
         if match:
             return match.group(1).lower()
@@ -168,19 +152,12 @@ def check_semantic_cache(cache_index, query):
             raise TypeError("Query must be a string.")
 
         if cache_index is None:
-            print(
-                "Semantic cache unavailable. "
-                "Skipping semantic cache check."
-            )
+            print("Semantic cache unavailable. Skipping semantic cache check.")
             return None
 
         vector = embed_query(query)
 
-        results = cache_index.query(
-            vector=vector,
-            top_k=1,
-            include_metadata=True
-        )
+        results = cache_index.query(vector=vector, top_k=1, include_metadata=True)
 
         if results.matches:
             match = results.matches[0]
@@ -216,18 +193,11 @@ def check_semantic_cache(cache_index, query):
         return None
 
     except TypeError as e:
-        print(
-            'Invalid Query'
-            '(check_semantic_cache[cache.py]): \n',
-            e
-        )
+        print("Invalid Query(check_semantic_cache[cache.py]): \n", e)
         raise
 
     except Exception as e:
-        print(
-            f"Error checking semantic cache"
-            f"(check_semantic_cache[cache.py]): \n{e}"
-        )
+        print(f"Error checking semantic cache(check_semantic_cache[cache.py]): \n{e}")
         return None
 
 
@@ -237,24 +207,13 @@ def save_exact_cache(redis_client, query, response):
             raise TypeError("Query must be a string.")
 
         if redis_client is None:
-            print(
-                "Redis cache unavailable. "
-                "Skipping exact cache save."
-            )
+            print("Redis cache unavailable. Skipping exact cache save.")
             return None
 
-        redis_client.set(
-            query,
-            response,
-            ex=REDIS_CACHE_TTL
-        )
+        redis_client.set(query, response, ex=REDIS_CACHE_TTL)
 
     except TypeError as e:
-        print(
-            'Invalid Query'
-            '(save_exact_cache[cache.py]): \n',
-            e
-        )
+        print("Invalid Query(save_exact_cache[cache.py]): \n", e)
         raise
 
     except redis.ConnectionError as e:
@@ -265,10 +224,7 @@ def save_exact_cache(redis_client, query, response):
         return None
 
     except Exception as e:
-        print(
-            f"Error saving exact cache"
-            f"(save_exact_cache[cache.py]): \n{e}"
-        )
+        print(f"Error saving exact cache(save_exact_cache[cache.py]): \n{e}")
         raise
 
 
@@ -278,10 +234,7 @@ def save_semantic_cache(cache_index, query, response):
             raise TypeError("Query must be a string.")
 
         if cache_index is None:
-            print(
-                "Semantic cache unavailable. "
-                "Skipping semantic cache save."
-            )
+            print("Semantic cache unavailable. Skipping semantic cache save.")
             return None
 
         vector = embed_query(query)
@@ -291,27 +244,17 @@ def save_semantic_cache(cache_index, query, response):
                 {
                     "id": str(uuid.uuid4()),
                     "values": vector,
-                    "metadata": {
-                        "query": query,
-                        "response": response
-                    }
+                    "metadata": {"query": query, "response": response},
                 }
             ]
         )
 
     except TypeError as e:
-        print(
-            'Invalid Query'
-            '(save_semantic_cache[cache.py]): \n',
-            e
-        )
+        print("Invalid Query(save_semantic_cache[cache.py]): \n", e)
         raise
 
     except Exception as e:
-        print(
-            f"Error saving semantic cache"
-            f"(save_semantic_cache[cache.py]): \n{e}"
-        )
+        print(f"Error saving semantic cache(save_semantic_cache[cache.py]): \n{e}")
         raise
 
 
@@ -340,18 +283,11 @@ def check_cache(redis_client, cache_index, query):
         return None
 
     except TypeError as e:
-        print(
-            'Invalid Query'
-            '(check_cache[cache.py]): \n',
-            e
-        )
+        print("Invalid Query(check_cache[cache.py]): \n", e)
         raise
 
     except Exception as e:
-        print(
-            f"Error checking cache"
-            f"(check_cache[cache.py]): \n{e}"
-        )
+        print(f"Error checking cache(check_cache[cache.py]): \n{e}")
         raise
 
 
@@ -369,18 +305,11 @@ def save_to_cache(redis_client, cache_index, query, response):
         print("Saved to semantic cache")
 
     except TypeError as e:
-        print(
-            'Invalid Query'
-            '(save_to_cache[cache.py]): \n',
-            e
-        )
+        print("Invalid Query(save_to_cache[cache.py]): \n", e)
         raise
 
     except Exception as e:
-        print(
-            f"Error saving to cache"
-            f"(save_to_cache[cache.py]): \n{e}"
-        )
+        print(f"Error saving to cache(save_to_cache[cache.py]): \n{e}")
         raise
 
 
@@ -391,10 +320,7 @@ def clear_cache(redis_client, cache_index):
             redis_client.flushdb()
             print("Local Redis cleared.")
         else:
-            print(
-                "Local Redis unavailable. "
-                "Skipping local Redis clear."
-            )
+            print("Local Redis unavailable. Skipping local Redis clear.")
 
     except redis.ConnectionError as e:
         print(
@@ -410,7 +336,7 @@ def clear_cache(redis_client, cache_index):
             db=REDIS_DB,
             username=REDIS_USERNAME,
             password=REDIS_PASSWORD,
-            decode_responses=True
+            decode_responses=True,
         )
 
         redis_cloud_client.flushdb()
@@ -428,19 +354,13 @@ def clear_cache(redis_client, cache_index):
             cache_index.delete(delete_all=True, namespace="")
             print("Semantic cache cleared.")
         else:
-            print(
-                "Semantic cache unavailable. "
-                "Skipping semantic cache clear."
-            )
+            print("Semantic cache unavailable. Skipping semantic cache clear.")
 
     except Exception as e:
         if "Namespace not found" in str(e):
             print("Semantic cache already empty.")
         else:
-            print(
-                f"Error clearing semantic cache"
-                f"(clear_cache[cache.py]): \n{e}"
-            )
+            print(f"Error clearing semantic cache(clear_cache[cache.py]): \n{e}")
             raise
 
 
@@ -452,26 +372,12 @@ def main():
 
     query = "What is Article 21?"
 
-    response = check_semantic_cache(
-        cache_index,
-        query
-    )
+    response = check_semantic_cache(cache_index, query)
 
-    save_to_cache(
-        redis_client,
-        cache_index,
-        query,
-        response
-    )
+    save_to_cache(redis_client, cache_index, query, response)
 
     print("\nChecking cache:")
-    print(
-        check_cache(
-            redis_client,
-            cache_index,
-            query
-        )
-    )
+    print(check_cache(redis_client, cache_index, query))
 
 
 if __name__ == "__main__":

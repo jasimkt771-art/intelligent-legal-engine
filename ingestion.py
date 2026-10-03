@@ -42,7 +42,7 @@ def extract_articles(text):
             raise TypeError("Text must be a string.")
 
         # Match Article headings at the beginning of a line.
-        pattern = r'(?m)^Article\s+\d+[A-Z]*'
+        pattern = r"(?m)^Article\s+\d+[A-Z]*"
         matches = list(re.finditer(pattern, text))
 
         if not matches:
@@ -52,18 +52,16 @@ def extract_articles(text):
 
         for i in range(len(matches)):
             start = matches[i].start()
-            end = (
-                matches[i + 1].start()
-                if i + 1 < len(matches)
-                else len(text)
-            )
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
 
             articles.append(text[start:end])
 
         return articles
 
     except TypeError as e:
-        print(f"Invalid text input for article extraction(extract_articles[ingestion.py]): \n{e}")
+        print(
+            f"Invalid text input for article extraction(extract_articles[ingestion.py]): \n{e}"
+        )
         raise
 
 
@@ -94,20 +92,26 @@ def generate_hybrid_vectors(articles):
             dense_vector = model.encode(article)
             sparse_vector = bm25.encode_documents(article)
 
-            hybrid_vectors.append({
-                "text": article,
-                "dense_vector": dense_vector.tolist(),
-                "sparse_vector": sparse_vector
-            })
+            hybrid_vectors.append(
+                {
+                    "text": article,
+                    "dense_vector": dense_vector.tolist(),
+                    "sparse_vector": sparse_vector,
+                }
+            )
 
         return hybrid_vectors
 
     except TypeError as e:
-        print(f"Invalid input for hybrid vector generation(generate_hybrid_vectors[ingestion.py]): \n{e}")
+        print(
+            f"Invalid input for hybrid vector generation(generate_hybrid_vectors[ingestion.py]): \n{e}"
+        )
         raise
 
     except Exception as e:
-        print(f"Error generating hybrid vectors(generate_hybrid_vectors[ingestion.py]): \n{e}")
+        print(
+            f"Error generating hybrid vectors(generate_hybrid_vectors[ingestion.py]): \n{e}"
+        )
         raise
 
 
@@ -129,14 +133,14 @@ def upsert_to_pinecone(hybrid_vectors):
         records = []
 
         for item in hybrid_vectors:
-            records.append({
-                "id": str(uuid.uuid4()),
-                "values": item["dense_vector"],
-                "sparse_values": item["sparse_vector"],
-                "metadata": {
-                    "text": item["text"]
+            records.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "values": item["dense_vector"],
+                    "sparse_values": item["sparse_vector"],
+                    "metadata": {"text": item["text"]},
                 }
-            })
+            )
 
         index.upsert(vectors=records)
 
@@ -145,11 +149,15 @@ def upsert_to_pinecone(hybrid_vectors):
         return True
 
     except TypeError as e:
-        print(f"Invalid input for Pinecone upload(upsert_to_pinecone[ingestion.py]): \n{e}")
+        print(
+            f"Invalid input for Pinecone upload(upsert_to_pinecone[ingestion.py]): \n{e}"
+        )
         raise
 
     except ValueError as e:
-        print(f"Invalid value for Pinecone upload(upsert_to_pinecone[ingestion.py]): \n{e}")
+        print(
+            f"Invalid value for Pinecone upload(upsert_to_pinecone[ingestion.py]): \n{e}"
+        )
         raise
 
     except KeyError as e:
@@ -178,8 +186,8 @@ def main():
 
         for i, vector in enumerate(hybrid_vectors, start=1):
             print(f"Article {i}")
-            print(f'\nDense Vector:\n{vector["dense_vector"][:5]}')
-            print(f'\nSparse Vector:\n{vector["sparse_vector"]}')
+            print(f"\nDense Vector:\n{vector['dense_vector'][:5]}")
+            print(f"\nSparse Vector:\n{vector['sparse_vector']}")
             print(vector["text"][:100])
 
         result = upsert_to_pinecone(hybrid_vectors)

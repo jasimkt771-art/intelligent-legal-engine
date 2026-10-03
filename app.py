@@ -4,7 +4,7 @@ import supabase
 
 from retrieval import get_context
 from memory import get_memory, fetch_session_messages, get_recent_sessions, save_turn
-from cache import connect_to_cache, check_cache, save_to_cache, clear_cache
+from cache import connect_to_cache, check_cache, save_to_cache
 from llm import generate_response
 
 
@@ -43,7 +43,9 @@ def load_chat_history(session_id):
         raise
 
     except KeyError as e:
-        print("\nMissing required field in chat history(load_chat_history[app.py]):\n", e)
+        print(
+            "\nMissing required field in chat history(load_chat_history[app.py]):\n", e
+        )
         raise
 
     except Exception as e:
@@ -63,66 +65,54 @@ def is_follow_up_query(query, has_history):
 
     follow_up_patterns = [
         # References / what they said
-        "what about that", "what about this", "what about it", "how about that",
-        "how about this", "how about it", "what you said", "what you mentioned",
-        "as you mentioned", "as you said", "you mentioned earlier", "you said earlier",
+        "what about that", "what about this", "what about it", "how about that", "how about this", "how about it",
+        "what you said", "what you mentioned", "as you mentioned", "as you said", "you mentioned earlier",
+        "you said earlier",
 
         # Meaning / significance
-        "what does that mean", "what does this mean", "what does it mean",
-        "what did that mean", "what did this mean", "what did it mean",
-        "what is its significance", "what's its significance",
-        "why is that significant", "why is this significant",
-        "what does it signify", "what does that signify", "what does this signify",
-        "what does that actually mean", "what exactly did you mean by that",
-        "what exactly did you mean",
+        "what does that mean", "what does this mean", "what does it mean", "what did that mean", "what did this mean",
+        "what did it mean", "what is its significance", "what's its significance", "why is that significant",
+        "why is this significant", "what does it signify", "what does that signify", "what does this signify",
+        "what does that actually mean", "what exactly did you mean by that", "what exactly did you mean",
 
         # Explanation / clarification
-        "explain that", "explain this", "explain it", "explain simply", "explain again",
-        "explain the above", "explain the previous", "explain what you mean",
-        "explain that again", "can you explain that", "can you explain this",
-        "can you explain it", "can you clarify", "clarify that", "clarify this",
-        "clarify it", "can you elaborate", "elaborate on that", "elaborate on this",
-        "can you expand on that", "can you explain what you just said",
+        "explain that", "explain this", "explain it", "explain simply", "explain again", "explain the above",
+        "explain the previous", "explain what you mean", "explain that again", "can you explain that",
+        "can you explain this", "can you explain it", "can you clarify", "clarify that", "clarify this", "clarify it",
+        "can you elaborate", "elaborate on that", "elaborate on this", "can you expand on that",
+        "can you explain what you just said",
 
         # Previous answer / previous point
-        "the previous answer", "the previous point", "the previous one", "the previous",
-        "the above", "the above answer", "the above point", "the above one",
-        "what you said earlier", "what you mentioned earlier",
+        "the previous answer", "the previous point", "the previous one", "the previous", "the above",
+        "the above answer", "the above point", "the above one", "what you said earlier", "what you mentioned earlier",
 
         # More details
-        "tell me more about that", "tell me more about this", "tell me more about it",
-        "more about that", "more about this", "more about it",
-        "can you tell me more about that", "can you tell me more about this",
-        "give me more details about that", "give me more details about this",
-        "explain further", "go into more detail about that", "go into more detail about this",
-        "anything else about that", "anything else about this",
+        "tell me more about that", "tell me more about this", "tell me more about it", "more about that",
+        "more about this", "more about it", "can you tell me more about that", "can you tell me more about this",
+        "give me more details about that", "give me more details about this", "explain further",
+        "go into more detail about that", "go into more detail about this", "anything else about that",
+        "anything else about this",
 
         # Application / consequences
-        "what happens after that", "what happens next", "what does that do",
-        "what does this do", "how does that work", "how does this work",
-        "how does it work", "how does that apply", "how does this apply",
-        "does that apply", "does this apply", "does it apply",
-        "why does that matter", "why does this matter", "why does it matter",
-        "what exactly were you referring to",
+        "what happens after that", "what happens next", "what does that do", "what does this do",
+        "how does that work", "how does this work", "how does it work", "how does that apply",
+        "how does this apply", "does that apply", "does this apply", "does it apply", "why does that matter",
+        "why does this matter", "why does it matter", "what exactly were you referring to",
 
         # Comparisons / differences
-        "compare that", "compare this", "compare it", "compare the above",
-        "compare the previous", "how is that different", "how is this different",
+        "compare that", "compare this", "compare it", "compare the above", "compare the previous",
+        "how is that different", "how is this different",
 
         # Reasoning / why
-        "why did you say", "why did you mention", "why is that", "why is this",
-        "why is it", "why does that", "why does this", "why would that",
-        "why would this", "how did you get that", "how did you reach that",
+        "why did you say", "why did you mention", "why is that", "why is this", "why is it", "why does that",
+        "why does this", "why would that", "why would this", "how did you get that", "how did you reach that",
 
         # References to context
-        "based on that", "based on this", "based on what you said",
-        "according to that", "according to this", "from that", "from this",
-        "then what", "and what about", "so what does that mean",
-        "so what does this mean",
+        "based on that", "based on this", "based on what you said", "according to that", "according to this",
+        "from that", "from this", "then what", "and what about", "so what does that mean", "so what does this mean",
 
         # Informal / conversational
-        "what do u mean", "what do you mean", "what did you mean",
-        "what are you saying", "what are you referring to"
+        "what do u mean", "what do you mean", "what did you mean", "what are you saying", "what are you referring to",
     ]
 
     normalized_query = query.lower().strip()
@@ -164,9 +154,9 @@ def build_retrieval_query(query, history):
 
     for message in reversed(messages):
         if message.startswith("Assistant:") and not latest_assistant_message:
-            latest_assistant_message = message[len("Assistant:"):].strip()
+            latest_assistant_message = message[len("Assistant:") :].strip()
         elif message.startswith("User:") and not latest_user_message:
-            latest_user_message = message[len("User:"):].strip()
+            latest_user_message = message[len("User:") :].strip()
 
         if latest_user_message and latest_assistant_message:
             break
@@ -222,7 +212,9 @@ def process_query(query, session_id, redis_client, cache_index):
 
         try:
             save_turn(session_id, query, response)
-            print(f"Saved\nQuery:\n{query}\n\nAND\n\nResponse:\n{response}\n\nTo database chat_history with session_id: {session_id}\n")
+            print(
+                f"Saved\nQuery:\n{query}\n\nAND\n\nResponse:\n{response}\n\nTo database chat_history with session_id: {session_id}\n"
+            )
 
             try:
                 if not is_follow_up:
@@ -233,10 +225,14 @@ def process_query(query, session_id, redis_client, cache_index):
                     print("\nQuery is a follow-up, so its not being saved to cache\n")
 
             except Exception as e:
-                print(f"Cache unavailable, response will not be saved to cache(process_query[app.py]):\n{e}")
+                print(
+                    f"Cache unavailable, response will not be saved to cache(process_query[app.py]):\n{e}"
+                )
 
         except supabase.SupabaseException as e:
-            print(f"Supabase unavailable, response will not be saved to memory or cache(process_query[app.py]):\n{e}")
+            print(
+                f"Supabase unavailable, response will not be saved to memory or cache(process_query[app.py]):\n{e}"
+            )
 
         print()
         return response
@@ -258,7 +254,10 @@ def render_sidebar():
 
         st.divider()
 
-        st.markdown("<h2 style='margin-top: -25px; margin-bottom: 20px; font-size: 28px;'>Previous Chats</h2>", unsafe_allow_html=True)
+        st.markdown(
+            "<h2 style='margin-top: -25px; margin-bottom: 20px; font-size: 28px;'>Previous Chats</h2>",
+            unsafe_allow_html=True,
+        )
 
         try:
             sessions = get_recent_sessions(limit=5)
@@ -267,7 +266,9 @@ def render_sidebar():
                 session_id = session["session_id"]
                 first_query = session["first_query"]
 
-                if st.button(first_query, key=f"chat_{session_id}", use_container_width=True):
+                if st.button(
+                    first_query, key=f"chat_{session_id}", use_container_width=True
+                ):
                     selected_session = session_id
 
         except Exception as e:
@@ -279,7 +280,9 @@ def render_sidebar():
 
 def main():
     try:
-        st.set_page_config(page_title="Intelligent Legal Engine", page_icon="⚖️", layout="wide")
+        st.set_page_config(
+            page_title="Intelligent Legal Engine", page_icon="⚖️", layout="wide"
+        )
         st.title("⚖️ Intelligent Legal Engine")
 
         redis_client, cache_index = initialize_connections()
@@ -321,7 +324,9 @@ def main():
 
             except Exception as e:
                 print(f"Query processing failed(main[app.py]):\n{e}")
-                st.error("Something went wrong while processing your question. Please try again.")
+                st.error(
+                    "Something went wrong while processing your question. Please try again."
+                )
                 return
 
             with st.chat_message("assistant"):

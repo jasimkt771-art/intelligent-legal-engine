@@ -32,7 +32,9 @@ def initialize_models():
         return model, bm25
 
     except Exception as e:
-        print(f"Error initializing retrieval models(initialize_models[retrieval.py]):\n{e}")
+        print(
+            f"Error initializing retrieval models(initialize_models[retrieval.py]):\n{e}"
+        )
         raise
 
 
@@ -56,9 +58,7 @@ def connect_to_cohere():
 
     try:
         if cohere_client is None:
-            cohere_client = cohere.ClientV2(
-                api_key=COHERE_API_KEY
-            )
+            cohere_client = cohere.ClientV2(api_key=COHERE_API_KEY)
 
         return cohere_client
 
@@ -106,7 +106,7 @@ def hybrid_search(dense_vector, sparse_vector):
             vector=dense_vector,
             sparse_vector=sparse_vector,
             top_k=20,
-            include_metadata=True
+            include_metadata=True,
         )
 
         try:
@@ -128,10 +128,7 @@ def hybrid_search(dense_vector, sparse_vector):
         raise
 
     except Exception as e:
-        print(
-            f"Error performing hybrid search"
-            f"(hybrid_search[retrieval.py]): \n{e}"
-        )
+        print(f"Error performing hybrid search(hybrid_search[retrieval.py]): \n{e}")
         raise
 
 
@@ -152,10 +149,7 @@ def rerank_results(query, matches):
 
         # Rerank the top 20 retrieved documents and keep the 5 most relevant.
         reranked = co.rerank(
-            query=query,
-            documents=documents,
-            top_n=5,
-            model="rerank-v3.5"
+            query=query, documents=documents, top_n=5, model="rerank-v3.5"
         )
 
         top_contexts = []
@@ -166,24 +160,15 @@ def rerank_results(query, matches):
         return top_contexts
 
     except KeyError as e:
-        print(
-            f"Missing required match field"
-            f"(rerank_results[retrieval.py]): \n{e}"
-        )
+        print(f"Missing required match field(rerank_results[retrieval.py]): \n{e}")
         raise
 
     except TypeError as e:
-        print(
-            f"Invalid input for reranking"
-            f"(rerank_results[retrieval.py]): \n{e}"
-        )
+        print(f"Invalid input for reranking(rerank_results[retrieval.py]): \n{e}")
         raise
 
     except Exception as e:
-        print(
-            f"Error reranking results"
-            f"(rerank_results[retrieval.py]): \n{e}"
-        )
+        print(f"Error reranking results(rerank_results[retrieval.py]): \n{e}")
         raise
 
 
@@ -198,10 +183,7 @@ def get_context(query):
         return contexts
 
     except Exception as e:
-        print(
-            f"Error getting context"
-            f"(get_context[retrieval.py]): \n{e}"
-        )
+        print(f"Error getting context(get_context[retrieval.py]): \n{e}")
         raise
 
 
