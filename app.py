@@ -80,7 +80,7 @@ def is_follow_up_query(query, has_history):
         "explain the previous", "explain what you mean", "explain that again", "can you explain that",
         "can you explain this", "can you explain it", "can you clarify", "clarify that", "clarify this", "clarify it",
         "can you elaborate", "elaborate on that", "elaborate on this", "can you expand on that",
-        "can you explain what you just said", "explain more simply",
+        "can you explain what you just said", "explain more simply", "explain in detail", "explain with more detail",
 
         # Previous answer / previous point
         "the previous answer", "the previous point", "the previous one", "the previous", "the above",
