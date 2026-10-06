@@ -73,7 +73,7 @@ def is_follow_up_query(query, has_history):
         "what does that mean", "what does this mean", "what does it mean", "what did that mean", "what did this mean",
         "what did it mean", "what is its significance", "what's its significance", "why is that significant",
         "why is this significant", "what does it signify", "what does that signify", "what does this signify",
-        "what does that actually mean", "what exactly did you mean by that", "what exactly did you mean",
+        "what does that actually mean", "what exactly did you mean by that", "what exactly did you mean", "what is the significance",
 
         # Explanation / clarification
         "explain that", "explain this", "explain it", "explain simply", "explain again", "explain the above",

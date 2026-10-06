@@ -40,7 +40,11 @@ def test_process_query_returns_cached_response_without_generating_new_response()
 
     mock_get_context.assert_not_called()
     mock_generate_response.assert_not_called()
-    mock_save_turn.assert_not_called()
+    mock_save_turn.assert_called_once_with(
+session_id,
+        query,
+        cached_response,
+    )
     mock_save_to_cache.assert_not_called()
 
 
