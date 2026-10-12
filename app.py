@@ -52,74 +52,6 @@ def load_chat_history(session_id):
         print("\nError loading chat history(load_chat_history[app.py]):\n", e)
 
 
-def is_follow_up_query(query, has_history):
-    """
-    Determines whether a query is an obvious conversational follow-up.
-
-    Follow-up queries should bypass the global cache because their meaning
-    may depend on previous conversation history.
-    """
-
-    if not has_history:
-        return False
-
-    follow_up_patterns = [
-        # References / what they said
-        "what about that", "what about this", "what about it", "how about that", "how about this", "how about it",
-        "what you said", "what you mentioned", "as you mentioned", "as you said", "you mentioned earlier",
-        "you said earlier",
-
-        # Meaning / significance
-        "what does that mean", "what does this mean", "what does it mean", "what did that mean", "what did this mean",
-        "what did it mean", "what is its significance", "what's its significance", "why is that significant",
-        "why is this significant", "what does it signify", "what does that signify", "what does this signify",
-        "what does that actually mean", "what exactly did you mean by that", "what exactly did you mean", "what is the significance",
-
-        # Explanation / clarification
-        "explain that", "explain this", "explain it", "explain simply", "explain again", "explain the above",
-        "explain the previous", "explain what you mean", "explain that again", "can you explain that",
-        "can you explain this", "can you explain it", "can you clarify", "clarify that", "clarify this", "clarify it",
-        "can you elaborate", "elaborate on that", "elaborate on this", "can you expand on that",
-        "can you explain what you just said", "explain more simply", "explain in detail", "explain with more detail",
-
-        # Previous answer / previous point
-        "the previous answer", "the previous point", "the previous one", "the previous", "the above",
-        "the above answer", "the above point", "the above one", "what you said earlier", "what you mentioned earlier",
-
-        # More details
-        "tell me more about that", "tell me more about this", "tell me more about it", "more about that",
-        "more about this", "more about it", "can you tell me more about that", "can you tell me more about this",
-        "give me more details about that", "give me more details about this", "explain further",
-        "go into more detail about that", "go into more detail about this", "anything else about that",
-        "anything else about this",
-
-        # Application / consequences
-        "what happens after that", "what happens next", "what does that do", "what does this do",
-        "how does that work", "how does this work", "how does it work", "how does that apply",
-        "how does this apply", "does that apply", "does this apply", "does it apply", "why does that matter",
-        "why does this matter", "why does it matter", "what exactly were you referring to",
-
-        # Comparisons / differences
-        "compare that", "compare this", "compare it", "compare the above", "compare the previous",
-        "how is that different", "how is this different",
-
-        # Reasoning / why
-        "why did you say", "why did you mention", "why is that", "why is this", "why is it", "why does that",
-        "why does this", "why would that", "why would this", "how did you get that", "how did you reach that",
-
-        # References to context
-        "based on that", "based on this", "based on what you said", "according to that", "according to this",
-        "from that", "from this", "then what", "and what about", "so what does that mean", "so what does this mean",
-
-        # Informal / conversational
-        "what do u mean", "what do you mean", "what did you mean", "what are you saying", "what are you referring to",
-    ]
-
-    normalized_query = query.lower().strip()
-
-    return any(pattern in normalized_query for pattern in follow_up_patterns)
-
-
 def build_retrieval_query(query, history):
     """
     Builds a retrieval query using the latest conversation
@@ -149,28 +81,18 @@ def build_retrieval_query(query, history):
         end = message_starts[i + 1] if i + 1 < len(message_starts) else len(lines)
         messages.append("\n".join(lines[start:end]).strip())
 
-    latest_user_message = ""
-    latest_assistant_message = ""
+    # Keep the previous 3 conversation exchanges (up to 6 messages).
+    recent_messages = messages[-6:]
 
-    for message in reversed(messages):
-        if message.startswith("Assistant:") and not latest_assistant_message:
-            latest_assistant_message = message[len("Assistant:") :].strip()
-        elif message.startswith("User:") and not latest_user_message:
-            latest_user_message = message[len("User:") :].strip()
-
-        if latest_user_message and latest_assistant_message:
-            break
+    recent_history = "\n\n".join(recent_messages)
 
     retrieval_query = f"""
-Previous User Question:
-{latest_user_message}
-
-Previous Assistant Answer:
-{latest_assistant_message}
+Recent Conversation (up to 3 exchanges):
+{recent_history}
 
 Current User Question:
 {query}
-""".strip()
+    """.strip()
 
     print("\n====Current Retrieval Query=====\n\n", retrieval_query)
 
@@ -186,31 +108,40 @@ def process_query(query, session_id, redis_client, cache_index):
             raise TypeError("Session id must be a string.")
 
         history = get_memory(session_id)
-        has_history = bool(history.strip())
-        is_follow_up = is_follow_up_query(query, has_history)
 
         # Follow-up queries bypass the global cache because their meaning depends on conversation history.
-        if not is_follow_up:
-            print("\nQuery is not a follow-up, checking cache\n")
-            response = check_cache(redis_client, cache_index, query)
+        response = check_cache(redis_client, cache_index, query)
 
-            if response:
-                print(f"\nCached\nQuery:\n{query}\n\nWITH\n\nResponse:\n{response}\n\n")
-                print(f'Saving response to database chat_history with session_id: {session_id}')
-                save_turn(session_id, query, response)
-                return response
+        if response:
+            print(f"\nCached\nQuery:\n{query}\n\nWITH\n\nResponse:\n{response}\n\n")
+            print(f'Saving response to database chat_history with session_id: {session_id}')
+            save_turn(session_id, query, response)
+            return response
 
-        if is_follow_up:
-            # Add the previous conversation to the retrieval query so references like "that" can be resolved.
-            retrieval_query = build_retrieval_query(query, history)
-        else:
-            retrieval_query = query
+        # Add the previous conversation to the retrieval query so references like "that" can be resolved.
+        retrieval_query = build_retrieval_query(query, history)
 
         contexts = get_context(retrieval_query)
 
-        print("\nResponse is from LLLM\n")
+        print("\nResponse is from LLM\n")
 
-        response = generate_response(query, contexts, history)
+        # Generate the answer and classification in one LLM call.
+        llm_result = generate_response(
+            retrieval_query,
+            contexts,
+            history,
+        )
+
+        # Extract the user-facing answer.
+        response = llm_result["answer"]
+
+        # Extract the LLM-generated classification.
+        llm_is_follow_up = llm_result["is_follow_up"]
+
+        # Combine both classifications for the final decision.
+        is_follow_up = llm_is_follow_up
+
+        print(f"Final follow-up classification: {is_follow_up}")
 
         try:
             save_turn(session_id, query, response)

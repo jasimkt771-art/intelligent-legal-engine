@@ -1,6 +1,7 @@
 import ollama
 from google import genai
 from groq import Groq
+import json
 
 from config import (
     LLM_PROVIDER,
@@ -11,6 +12,7 @@ from config import (
     GROQ_MODEL,
     GEMINI,
     GROQ,
+    OLLAMA
 )
 
 
@@ -89,14 +91,33 @@ Citations:
 - 2nd highest relevant article
 - and so on, ranked by relevance.
 
+
 If the Retrieved Context does not contain enough information for a non-follow-up legal question:
-- Respond exactly: "The answer cannot be determined from the retrieved context."
+- Set the "answer" field to exactly:
+  "The answer cannot be determined from the retrieved context."
 
 If the user asks about an Article that is not present in the Retrieved Context:
 - Say that the requested Article was not included in the retrieved context.
 
-Answer:
+Follow-up classification:
+- Set "is_follow_up" to true if the current query depends on,
+  refers to, clarifies, or continues the previous conversation.
+- Set "is_follow_up" to false if the current query is independent.
+- A related legal topic alone does not make a query a follow-up.
+- If Previous Conversation is empty, set "is_follow_up" to false.
+
+Output requirements:
+- Return one JSON object containing exactly these two fields:
+  "answer" and "is_follow_up".
+- "answer" must contain the complete user-facing answer.
+- "is_follow_up" must be a Boolean: true or false.
+- Do not put the Boolean inside the answer text.
+- Do not include Markdown fences or text outside the JSON object.
+
+Required structure:
+{{"answer": "Your complete answer here", "is_follow_up": true}}
 """
+
 
         return prompt
 
@@ -123,34 +144,6 @@ def print_prompt_preview(query, contexts, history, max_chars=100):
     print("Answer: ")
 
 
-def generate_gemini_response(prompt):
-    try:
-        print("Model == GEMINI")
-
-        gemini_prompt = (
-            prompt
-            + """
-Gemini-Specific Instructions:
-- Explain the answer as if you are speaking to someone with no legal background.
-- Use simple, everyday language instead of formal legal language.
-- After mentioning a legal provision or legal term, explain what it means in simple words.
-- Focus on explaining what the provision actually means in practical terms in relation to the user's question.
-- Avoid unnecessary legal jargon.
-- If a legal term is necessary, immediately explain it in simple words.
-- Use clear and practical examples whenever they help the user understand the provision.
-- Keep the response concise while still covering all relevant information from the Retrieved Context.
-"""
-        )
-
-        response = client.models.generate_content(
-            model=GEMINI_MODEL, contents=gemini_prompt
-        )
-
-        return response.text
-
-    except Exception as e:
-        print(f"\nGemini failed:\n{e}")
-        raise
 
 
 def generate_groq_response(prompt):
@@ -161,74 +154,275 @@ def generate_groq_response(prompt):
             prompt
             + """
 Groq-Specific Instructions:
-- Explain the answer as if you are speaking to someone with no legal background.
-- Use simple, everyday language instead of formal legal language.
-- After mentioning a legal provision or legal term, explain what it means in simple words.
-- Focus on explaining what the provision actually means in practical terms in relation to the user's question.
-- Avoid unnecessary legal jargon.
-- If a legal term is necessary, immediately explain it in simple words.
-- Use clear and practical examples whenever they help the user understand the provision.
-- Keep the response concise while still covering all relevant information from the Retrieved Context.
+- Explain the answer in simple, everyday language.
+- Explain legal terms in plain language.
+- Use practical examples when helpful.
+- Keep the answer concise but complete.
+- Follow the required JSON output structure.
 """
         )
 
         response = groq_client.chat.completions.create(
-            model=GROQ_MODEL, messages=[{"role": "user", "content": groq_prompt}]
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "user", "content": groq_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
         )
 
         return response.choices[0].message.content
 
     except Exception as e:
-        print(f"\nGroq failed:\n{e}")
+        print(
+            "\nError generating Groq response"
+            "(generate_groq_response[llm.py]):\n",
+            e,
+        )
         raise
+
+
+'''
+Object hierarchy — Groq response fields accessed by this function:
+
+response
+└── choices
+    └── list
+        └── choices[0]
+            └── message
+                └── content
+                    └── string containing JSON
+                        ├── "answer"
+                        └── "is_follow_up"
+
+Exact access:
+response.choices[0].message.content
+
+Explanation:
+- response is the API response object.
+- choices is the list of generated choices.
+- choices[0] selects the first generated choice.
+- message contains the model's message.
+- content contains the raw JSON text.
+- The JSON fields are not accessed here. They are parsed later
+  by parse_llm_response().
+'''
+
+def generate_gemini_response(prompt):
+    try:
+        print("\nModel == GEMINI")
+
+        gemini_prompt = (
+            prompt
+            + """
+Gemini-Specific Instructions:
+- Explain the answer in simple, everyday language.
+- Explain legal terms in plain language.
+- Use practical examples when helpful.
+- Keep the answer concise but complete.
+- Follow the required JSON output structure.
+"""
+        )
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=gemini_prompt,
+            config={
+                "response_mime_type": "application/json"
+            },
+        )
+
+        if response.text is None:
+            raise ValueError(
+                "Gemini returned no response text."
+            )
+
+        return response.text
+
+    except ValueError as e:
+        print(
+            "\nInvalid Gemini response"
+            "(generate_gemini_response[llm.py]):\n",
+            e,
+        )
+        raise
+
+    except Exception as e:
+        print(
+            "\nError generating Gemini response"
+            "(generate_gemini_response[llm.py]):\n",
+            e,
+        )
+        raise
+
+
+'''
+Object hierarchy — Gemini response fields accessed by this function:
+
+response
+└── text
+    └── string containing JSON
+        ├── "answer"
+        └── "is_follow_up"
+
+Exact accesses:
+response.text
+
+Explanation:
+- response is the Gemini API response object.
+- text contains the generated response as a string.
+- The JSON fields are not accessed at this stage.
+- parse_llm_response() parses and validates those fields later.
+'''
+
+
+def generate_ollama_response(prompt):
+    try:
+        print("\nModel == OLLAMA\n")
+
+        ollama_prompt = (
+            prompt
+            + "\n\nReturn only a valid JSON object with exactly "
+            'two keys: "answer" and "is_follow_up". '
+            '"answer" must be a non-empty string. '
+            '"is_follow_up" must be a Boolean (true or false). '
+            "Do not include Markdown fences or additional text."
+        )
+
+        response = ollama.chat(
+            model=OLLAMA_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": ollama_prompt,
+                }
+            ],
+            format="json",
+        )
+
+        raw_response = response["message"]["content"]
+
+        if not isinstance(raw_response, str) or not raw_response.strip():
+            raise ValueError(
+                "Ollama returned an empty or invalid response."
+            )
+
+        return raw_response
+
+    except Exception as e:
+        print(
+            "\nException content/text("
+            "generate_ollama_response[llm.py]):\n",
+            e,
+        )
+        raise
+
+'''
+Relevant response hierarchy (simplified):
+
+response
+└── "message": dict
+    └── "content": str
+        └── JSON text
+            ├── "answer": str
+            └── "is_follow_up": bool
+
+Exact access:
+response["message"]["content"]
+
+Function contract: A — raises on failure.
+A successful call returns the raw JSON string.
+An empty response is treated as a failure, not a legitimate result.
+'''
+
+
+def parse_llm_response(raw_response):
+    try:
+        if not isinstance(raw_response, str):
+            raise TypeError("LLM response must be a string.")
+
+        result = json.loads(raw_response)
+
+        if not isinstance(result, dict):
+            raise ValueError("LLM response must be a JSON object.")
+
+        expected_keys = {"answer", "is_follow_up"}
+
+        if set(result.keys()) != expected_keys:
+            raise ValueError(
+                "LLM response must contain exactly "
+                "'answer' and 'is_follow_up'."
+            )
+
+        answer = result["answer"]
+        is_follow_up = result["is_follow_up"]
+
+        if not isinstance(answer, str) or not answer.strip():
+            raise ValueError("Answer must be a non-empty string.")
+
+        if not isinstance(is_follow_up, bool):
+            raise ValueError("'is_follow_up' must be a Boolean.")
+
+        return {
+            "answer": answer,
+            "is_follow_up": is_follow_up,
+        }
+
+    except json.JSONDecodeError as e:
+        print("\nInvalid JSON(parse_llm_response[llm.py]):\n", e)
+        raise
+
+    except TypeError as e:
+        print("\nInvalid input(parse_llm_response[llm.py]):\n", e)
+        raise
+
+    except ValueError as e:
+        print("\nInvalid response structure(parse_llm_response[llm.py]):\n", e)
+        raise
+
+    except Exception as e:
+        print("\nError parsing LLM response(parse_llm_response[llm.py]):\n", e)
+        raise
+
 
 
 def generate_response(query, contexts, history):
     try:
         prompt = build_prompt(query, contexts, history)
 
-        print_prompt_preview(query, contexts, history, max_chars=200)
+        print("\nPrompt preview:\n", prompt[:1000])
 
-        if LLM_PROVIDER == "ollama":
-            print("Model == OLLAMA")
+        raw_response = None
 
-            ollama_prompt = (
-                prompt
-                + """
-Ollama-Specific Instructions:
-- Provide a longer and more detailed response while remaining accurate and grounded in the Retrieved Context.
-"""
-            )
-
-            response = ollama.chat(
-                model=OLLAMA_MODEL,
-                messages=[{"role": "user", "content": ollama_prompt}],
-            )
-
-            return response["message"]["content"]
+        if LLM_PROVIDER == OLLAMA:
+            raw_response = generate_ollama_response(prompt)
 
         elif LLM_PROVIDER == GROQ:
             try:
-                return generate_groq_response(prompt)
+                raw_response = generate_groq_response(prompt)
 
             except Exception as e:
-                # Use Gemini as a fallback if the primary Groq request fails.
-                print(f"\nGroq unavailable. Switching to Gemini.\nGroq error: {e}\n")
-
-                return generate_gemini_response(prompt)
+                print(f"\nGroq unavailable. Switching to Gemini.\n"
+                      f"Groq error: {e}\n")
+                raw_response = generate_gemini_response(prompt)
 
         elif LLM_PROVIDER == GEMINI:
-            return generate_gemini_response(prompt)
+            raw_response = generate_gemini_response(prompt)
 
         else:
             raise ValueError(
-                f"Unsupported LLM provider(generate_response[llm.py]): {LLM_PROVIDER}"
+                f"Unsupported LLM provider(generate_response[llm.py]): "
+                f"{LLM_PROVIDER}"
             )
+
+        # Parse and validate the JSON returned by the selected provider.
+        result = parse_llm_response(raw_response)
+
+        return result
 
     except KeyError as e:
         print(
-            "\nMissing required field in LLM response(generate_response[llm.py]): \n", e
-        )
+            "\nMissing required field in LLM response(generate_response[llm.py]): \n", e)
         raise
 
     except Exception as e:
