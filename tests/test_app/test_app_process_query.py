@@ -1,170 +1,177 @@
+
+import pytest
 from unittest.mock import patch
 
-from app import process_query
+import app
 
 
-# process_query() tests
-# Total no of tests: 3
+SESSION_ID = "test-session"
+QUERY = "What is Article 14?"
+CONTEXTS = ["Article 14 provides equal protection under the law."]
+ANSWER = "Article 14 guarantees equal protection under the law."
 
-# Cache hit test
-def test_process_query_returns_cached_response_without_generating_new_response():
-    query = "What is Article 14?"
-    session_id = "session-123"
-    redis_client = object()
-    cache_index = object()
-    cached_response = "Cached legal answer."
 
+def test_process_query_returns_cached_response():
     with (
-        patch("app.get_memory", return_value="") as mock_get_memory,
-        patch("app.check_cache", return_value=cached_response) as mock_check_cache,
+        patch("app.get_memory", return_value=""),
+        patch("app.check_cache", return_value="Cached answer") as mock_check_cache,
+        patch("app.save_turn") as mock_save_turn,
         patch("app.get_context") as mock_get_context,
         patch("app.generate_response") as mock_generate_response,
-        patch("app.save_turn") as mock_save_turn,
         patch("app.save_to_cache") as mock_save_to_cache,
     ):
-        result = process_query(
-            query,
-            session_id,
-            redis_client,
-            cache_index,
+        result = app.process_query(
+            QUERY, SESSION_ID, "redis-client", "cache-index"
         )
 
-    assert result == cached_response
-
-    mock_get_memory.assert_called_once_with(session_id)
+    assert result == "Cached answer"
     mock_check_cache.assert_called_once_with(
-        redis_client,
-        cache_index,
-        query,
+        "redis-client", "cache-index", QUERY
     )
-
+    mock_save_turn.assert_called_once_with(
+        SESSION_ID, QUERY, "Cached answer"
+    )
     mock_get_context.assert_not_called()
     mock_generate_response.assert_not_called()
-    mock_save_turn.assert_called_once_with(
-session_id,
-        query,
-        cached_response,
-    )
     mock_save_to_cache.assert_not_called()
 
 
-# LLM hit test
-def test_process_query_generates_and_caches_response_on_cache_miss():
-    query = "What is Article 14?"
-    session_id = "session-123"
-    redis_client = object()
-    cache_index = object()
-    contexts = ["Article 14 guarantees equality before the law."]
-    generated_response = "Article 14 guarantees equality before the law."
-
+def test_process_query_generates_and_caches_independent_answer():
     with (
-        patch("app.get_memory", return_value="") as mock_get_memory,
+        patch("app.get_memory", return_value=""),
         patch("app.check_cache", return_value=None) as mock_check_cache,
-        patch("app.get_context", return_value=contexts) as mock_get_context,
+        patch(
+            "app.build_retrieval_query", return_value=QUERY
+        ) as mock_build_query,
+        patch("app.get_context", return_value=CONTEXTS) as mock_get_context,
         patch(
             "app.generate_response",
-            return_value=generated_response,
+            return_value={
+                "answer": ANSWER,
+                "is_follow_up": False,
+            },
         ) as mock_generate_response,
         patch("app.save_turn") as mock_save_turn,
         patch("app.save_to_cache") as mock_save_to_cache,
     ):
-        result = process_query(
-            query,
-            session_id,
-            redis_client,
-            cache_index,
+        result = app.process_query(
+            QUERY, SESSION_ID, "redis-client", "cache-index"
         )
 
-    assert result == generated_response
-
-    mock_get_memory.assert_called_once_with(session_id)
+    assert result == ANSWER
     mock_check_cache.assert_called_once_with(
-        redis_client,
-        cache_index,
-        query,
+        "redis-client", "cache-index", QUERY
     )
-    mock_get_context.assert_called_once_with(query)
-    mock_generate_response.assert_called_once_with(
-        query,
-        contexts,
-        "",
-    )
-    mock_save_turn.assert_called_once_with(
-        session_id,
-        query,
-        generated_response,
-    )
+    mock_build_query.assert_called_once_with(QUERY, "")
+    mock_get_context.assert_called_once_with(QUERY)
+    mock_generate_response.assert_called_once_with(QUERY, CONTEXTS, "")
+    mock_save_turn.assert_called_once_with(SESSION_ID, QUERY, ANSWER)
     mock_save_to_cache.assert_called_once_with(
-        redis_client,
-        cache_index,
-        query,
-        generated_response,
+        "redis-client", "cache-index", QUERY, ANSWER
     )
 
 
-# Follow-up query bypass cache test
-def test_process_query_bypasses_cache_for_follow_up():
-    query = "What about that?"
-    session_id = "session-123"
-    redis_client = object()
-    cache_index = object()
-
+def test_process_query_does_not_cache_llm_classified_follow_up():
     history = (
         "User: What is Article 14?\n"
-        "Assistant: Article 14 guarantees equality before the law."
+        "Assistant: Article 14 guarantees equal protection under the law."
     )
-
+    follow_up_query = "Does this protection extend to prisoners?"
     retrieval_query = (
-        "Previous User Question:\nWhat is Article 14?\n"
-        "Previous Assistant Answer:\n"
-        "Article 14 guarantees equality before the law.\n"
-        "Current User Question:\nWhat about that?"
+        "Recent Conversation (up to 3 exchanges):\n"
+        f"{history}\n\n"
+        f"Current User Question:\n{follow_up_query}"
     )
-
-    contexts = ["Retrieved legal context."]
-    generated_response = "Here is the explanation."
+    answer = "The retrieved context does not establish that."
 
     with (
-        patch("app.get_memory", return_value=history) as mock_get_memory,
-        patch("app.check_cache") as mock_check_cache,
+        patch("app.get_memory", return_value=history),
+        patch("app.check_cache", return_value=None) as mock_check_cache,
         patch(
             "app.build_retrieval_query",
             return_value=retrieval_query,
-        ) as mock_build_retrieval_query,
-        patch("app.get_context", return_value=contexts) as mock_get_context,
+        ) as mock_build_query,
+        patch("app.get_context", return_value=CONTEXTS) as mock_get_context,
         patch(
             "app.generate_response",
-            return_value=generated_response,
+            return_value={
+                "answer": answer,
+                "is_follow_up": True,
+            },
         ) as mock_generate_response,
         patch("app.save_turn") as mock_save_turn,
         patch("app.save_to_cache") as mock_save_to_cache,
     ):
-        result = process_query(
-            query,
-            session_id,
-            redis_client,
-            cache_index,
+        result = app.process_query(
+            follow_up_query, SESSION_ID, "redis-client", "cache-index"
         )
 
-    assert result == generated_response
-
-    mock_get_memory.assert_called_once_with(session_id)
-    mock_check_cache.assert_not_called()
-
-    mock_build_retrieval_query.assert_called_once_with(
-        query,
-        history,
+    assert result == answer
+    mock_check_cache.assert_called_once_with(
+        "redis-client", "cache-index", follow_up_query
     )
+    mock_build_query.assert_called_once_with(follow_up_query, history)
     mock_get_context.assert_called_once_with(retrieval_query)
-
     mock_generate_response.assert_called_once_with(
-        query,
-        contexts,
-        history,
+        retrieval_query, CONTEXTS, history
     )
     mock_save_turn.assert_called_once_with(
-        session_id,
-        query,
-        generated_response,
+        SESSION_ID, follow_up_query, answer
     )
     mock_save_to_cache.assert_not_called()
+
+
+def test_process_query_caches_when_llm_classifies_query_as_independent():
+    with (
+        patch("app.get_memory", return_value=""),
+        patch("app.check_cache", return_value=None),
+        patch("app.build_retrieval_query", return_value=QUERY),
+        patch("app.get_context", return_value=CONTEXTS),
+        patch(
+            "app.generate_response",
+            return_value={
+                "answer": ANSWER,
+                "is_follow_up": False,
+            },
+        ),
+        patch("app.save_turn") as mock_save_turn,
+        patch("app.save_to_cache") as mock_save_to_cache,
+    ):
+        result = app.process_query(
+            QUERY, SESSION_ID, "redis-client", "cache-index"
+        )
+
+    assert result == ANSWER
+    mock_save_turn.assert_called_once_with(SESSION_ID, QUERY, ANSWER)
+    mock_save_to_cache.assert_called_once_with(
+        "redis-client", "cache-index", QUERY, ANSWER
+    )
+
+
+def test_process_query_propagates_generation_errors():
+    with (
+        patch("app.get_memory", return_value=""),
+        patch("app.check_cache", return_value=None),
+        patch("app.build_retrieval_query", return_value=QUERY),
+        patch("app.get_context", return_value=CONTEXTS),
+        patch(
+            "app.generate_response",
+            side_effect=ValueError("LLM generation failed"),
+        ),
+        patch("app.save_turn") as mock_save_turn,
+        patch("app.save_to_cache") as mock_save_to_cache,
+    ):
+        with pytest.raises(ValueError, match="LLM generation failed"):
+            app.process_query(
+                QUERY, SESSION_ID, "redis-client", "cache-index"
+            )
+
+    mock_save_turn.assert_not_called()
+    mock_save_to_cache.assert_not_called()
+
+
+def test_process_query_rejects_invalid_query():
+    with pytest.raises(TypeError, match="Query must be a string"):
+        app.process_query(
+            None, SESSION_ID, "redis-client", "cache-index"
+        )

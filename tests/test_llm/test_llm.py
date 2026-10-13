@@ -1,254 +1,374 @@
-from unittest.mock import MagicMock, patch
 
+import json
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
 import llm
 
 
-# Total no of tests: 10
+VALID_RESPONSE = json.dumps(
+    {
+        "answer": "Article 14 guarantees equality before the law.",
+        "is_follow_up": False,
+    }
+)
+
+VALID_FOLLOW_UP_RESPONSE = json.dumps(
+    {
+        "answer": "Yes, based on the context provided.",
+        "is_follow_up": True,
+    }
+)
 
 
-# build_prompt() tests
+def test_parse_llm_response_returns_validated_dictionary():
+    result = llm.parse_llm_response(VALID_RESPONSE)
 
-# Query, history, and retrieved contexts are included in the generated prompt
-def test_build_prompt_includes_query_history_and_contexts():
-    result = llm.build_prompt(
-        "What is Article 21?",
-        [
-            "Article 21 protects life and personal liberty.",
-            "Article 19 provides several freedoms.",
-        ],
-        "User: Explain Article 19.\nAssistant: It provides freedoms.",
+    assert result == {
+        "answer": "Article 14 guarantees equality before the law.",
+        "is_follow_up": False,
+    }
+
+
+def test_parse_llm_response_accepts_follow_up_true():
+    result = llm.parse_llm_response(VALID_FOLLOW_UP_RESPONSE)
+
+    assert result["is_follow_up"] is True
+
+
+@pytest.mark.parametrize(
+    "raw_response",
+    [
+        "not JSON",
+        '{"answer": "Missing classification"}',
+        '{"is_follow_up": false}',
+        '{"answer": "Answer", "is_follow_up": false, "extra": 1}',
+        '{"answer": "", "is_follow_up": false}',
+        '{"answer": "Answer", "is_follow_up": "false"}',
+        '{"answer": "Answer", "is_follow_up": null}',
+        "[]",
+        "null",
+    ],
+)
+def test_parse_llm_response_rejects_invalid_responses(raw_response):
+    with pytest.raises((ValueError, TypeError)):
+        llm.parse_llm_response(raw_response)
+
+
+@pytest.mark.parametrize(
+    "raw_response",
+    [None, 123, {"answer": "Answer"}],
+)
+def test_parse_llm_response_rejects_non_string_input(raw_response):
+    with pytest.raises(TypeError):
+        llm.parse_llm_response(raw_response)
+
+
+def test_build_prompt_includes_query_context_history_and_json_requirements():
+    query = "What is Article 14?"
+    contexts = ["Article 14 guarantees equality before the law."]
+    history = (
+        "User: Explain equality.\n"
+        "Assistant: Equality means equal treatment."
     )
 
-    assert "What is Article 21?" in result
-    assert "User: Explain Article 19." in result
-    assert "Assistant: It provides freedoms." in result
-    assert "Article 21 protects life and personal liberty." in result
-    assert "Article 19 provides several freedoms." in result
-    assert "You are a legal assistant." in result
-    assert "Retrieved Context is the only source of truth" in result
+    prompt = llm.build_prompt(query, contexts, history)
+
+    assert query in prompt
+    assert contexts[0] in prompt
+    assert history in prompt
+    assert '"answer"' in prompt
+    assert '"is_follow_up"' in prompt
+    assert "JSON object" in prompt
 
 
-# Multiple contexts are joined with blank lines
-def test_build_prompt_separates_contexts():
-    result = llm.build_prompt(
-        "What is Article 21?",
-        ["First context", "Second context", "Third context"],
-        "",
-    )
+@pytest.mark.parametrize(
+    ("query", "contexts", "history"),
+    [
+        (None, [], ""),
+        ("Question?", "not a list", ""),
+        ("Question?", [], None),
+    ],
+)
+def test_build_prompt_rejects_invalid_inputs(query, contexts, history):
+    with pytest.raises(TypeError):
+        llm.build_prompt(query, contexts, history)
 
-    assert "First context\n\nSecond context\n\nThird context" in result
 
-
-# generate_gemini_response() tests
-
-# Gemini receives the prompt with Gemini-specific instructions and returns its text
-def test_generate_gemini_response_returns_response_text():
-    mock_response = MagicMock()
-    mock_response.text = "Gemini legal response."
+def test_generate_ollama_response_requests_json_format():
+    mock_response = {
+        "message": {
+            "content": VALID_RESPONSE,
+        }
+    }
 
     with patch(
-        "llm.client.models.generate_content",
+        "llm.ollama.chat",
         return_value=mock_response,
-    ) as mock_generate:
-        result = llm.generate_gemini_response("Base prompt")
+    ) as mock_chat:
+        result = llm.generate_ollama_response("Test prompt")
 
-        assert result == "Gemini legal response."
+    assert result == VALID_RESPONSE
+    mock_chat.assert_called_once()
 
-        mock_generate.assert_called_once()
-
-        call_kwargs = mock_generate.call_args.kwargs
-
-        assert call_kwargs["model"] == llm.GEMINI_MODEL
-        assert "Base prompt" in call_kwargs["contents"]
-        assert "Gemini-Specific Instructions:" in call_kwargs["contents"]
+    kwargs = mock_chat.call_args.kwargs
+    assert kwargs["model"] == llm.OLLAMA_MODEL
+    assert kwargs["format"] == "json"
+    assert kwargs["messages"][0]["content"].startswith("Test prompt")
 
 
-# generate_groq_response() tests
+def test_generate_ollama_response_raises_for_empty_content():
+    mock_response = {"message": {"content": ""}}
 
-# Groq receives the prompt with Groq-specific instructions and returns message content
-def test_generate_groq_response_returns_response_content():
-    mock_response = MagicMock()
-    mock_response.choices[0].message.content = "Groq legal response."
+    with patch("llm.ollama.chat", return_value=mock_response):
+        with pytest.raises(ValueError, match="empty or invalid"):
+            llm.generate_ollama_response("Test prompt")
+
+
+def test_generate_groq_response_requests_json_object():
+    mock_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=VALID_RESPONSE)
+            )
+        ]
+    )
 
     with patch(
         "llm.groq_client.chat.completions.create",
         return_value=mock_response,
     ) as mock_create:
-        result = llm.generate_groq_response("Base prompt")
+        result = llm.generate_groq_response("Test prompt")
 
-        assert result == "Groq legal response."
+    assert result == VALID_RESPONSE
 
-        mock_create.assert_called_once()
-
-        call_kwargs = mock_create.call_args.kwargs
-
-        assert call_kwargs["model"] == llm.GROQ_MODEL
-        assert len(call_kwargs["messages"]) == 1
-        assert call_kwargs["messages"][0]["role"] == "user"
-        assert "Base prompt" in call_kwargs["messages"][0]["content"]
-        assert "Groq-Specific Instructions:" in call_kwargs["messages"][0]["content"]
+    kwargs = mock_create.call_args.kwargs
+    assert kwargs["model"] == llm.GROQ_MODEL
+    assert kwargs["response_format"] == {"type": "json_object"}
+    assert kwargs["temperature"] == 0
+    assert kwargs["messages"][0]["content"].startswith("Test prompt")
 
 
-# generate_response() tests
+def test_generate_groq_response_propagates_api_errors():
+    with patch(
+        "llm.groq_client.chat.completions.create",
+        side_effect=RuntimeError("Groq unavailable"),
+    ):
+        with pytest.raises(RuntimeError, match="Groq unavailable"):
+            llm.generate_groq_response("Test prompt")
 
-# Ollama is used directly when the configured provider is Ollama
-def test_generate_response_uses_ollama():
-    ollama_response = {
-        "message": {
-            "content": "Ollama legal response."
-        }
+
+def test_generate_gemini_response_requests_json():
+    mock_response = SimpleNamespace(text=VALID_RESPONSE)
+
+    with patch(
+        "llm.client.models.generate_content",
+        return_value=mock_response,
+    ) as mock_generate:
+        result = llm.generate_gemini_response("Test prompt")
+
+    assert result == VALID_RESPONSE
+
+    kwargs = mock_generate.call_args.kwargs
+    assert kwargs["model"] == llm.GEMINI_MODEL
+    assert kwargs["contents"].startswith("Test prompt")
+    assert kwargs["config"] == {
+        "response_mime_type": "application/json"
     }
 
-    with (
-        patch("llm.LLM_PROVIDER", "ollama"),
-        patch(
-            "llm.build_prompt",
-            return_value="Built prompt",
-        ) as mock_build_prompt,
-        patch(
-            "llm.print_prompt_preview",
-        ) as mock_preview,
-        patch(
-            "llm.ollama.chat",
-            return_value=ollama_response,
-        ) as mock_chat,
+
+def test_generate_gemini_response_raises_when_text_is_missing():
+    mock_response = SimpleNamespace(text=None)
+
+    with patch(
+        "llm.client.models.generate_content",
+        return_value=mock_response,
     ):
-        result = llm.generate_response(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
+        with pytest.raises(ValueError, match="no response text"):
+            llm.generate_gemini_response("Test prompt")
+
+
+def test_generate_response_uses_ollama():
+    with (
+        patch("llm.LLM_PROVIDER", llm.OLLAMA),
+        patch(
+            "llm.generate_ollama_response",
+            return_value=VALID_RESPONSE,
+        ) as mock_ollama,
+    ):
+        result, attempts = llm.generate_response(
+            "What is Article 14?",
+            ["Article 14 guarantees equality."],
+            "",
         )
 
-        assert result == "Ollama legal response."
-
-        mock_build_prompt.assert_called_once_with(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
-        )
-
-        mock_preview.assert_called_once_with(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
-            max_chars=200,
-        )
-
-        call_kwargs = mock_chat.call_args.kwargs
-
-        assert call_kwargs["model"] == llm.OLLAMA_MODEL
-        assert call_kwargs["messages"][0]["role"] == "user"
-        assert "Built prompt" in call_kwargs["messages"][0]["content"]
-        assert "Ollama-Specific Instructions:" in call_kwargs["messages"][0]["content"]
+    assert result == json.loads(VALID_RESPONSE)
+    assert attempts == 1
+    mock_ollama.assert_called_once()
 
 
-# Groq is used as the primary provider when configured
 def test_generate_response_uses_groq():
     with (
         patch("llm.LLM_PROVIDER", llm.GROQ),
         patch(
-            "llm.build_prompt",
-            return_value="Built prompt",
-        ) as mock_build_prompt,
-        patch(
-            "llm.print_prompt_preview",
-        ) as mock_preview,
-        patch(
             "llm.generate_groq_response",
-            return_value="Groq legal response.",
+            return_value=VALID_RESPONSE,
         ) as mock_groq,
+        patch("llm.generate_gemini_response") as mock_gemini,
     ):
-        result = llm.generate_response(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
+        result, attempts = llm.generate_response(
+            "What is Article 14?",
+            ["Article 14 guarantees equality."],
+            "",
         )
 
-        assert result == "Groq legal response."
-
-        mock_build_prompt.assert_called_once_with(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
-        )
-
-        mock_preview.assert_called_once_with(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
-            max_chars=200,
-        )
-
-        mock_groq.assert_called_once_with("Built prompt")
+    assert result == json.loads(VALID_RESPONSE)
+    assert attempts == 1
+    mock_groq.assert_called_once()
+    mock_gemini.assert_not_called()
 
 
-# Gemini is used directly when configured as the provider
 def test_generate_response_uses_gemini():
     with (
         patch("llm.LLM_PROVIDER", llm.GEMINI),
         patch(
-            "llm.build_prompt",
-            return_value="Built prompt",
-        ) as mock_build_prompt,
-        patch(
-            "llm.print_prompt_preview",
-        ) as mock_preview,
-        patch(
             "llm.generate_gemini_response",
-            return_value="Gemini legal response.",
+            return_value=VALID_RESPONSE,
         ) as mock_gemini,
+        patch("llm.generate_groq_response") as mock_groq,
     ):
-        result = llm.generate_response(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
+        result, attempts = llm.generate_response(
+            "What is Article 14?",
+            ["Article 14 guarantees equality."],
+            "",
         )
 
-        assert result == "Gemini legal response."
-
-        mock_build_prompt.assert_called_once_with(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
-        )
-
-        mock_preview.assert_called_once_with(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
-            max_chars=200,
-        )
-
-        mock_gemini.assert_called_once_with("Built prompt")
+    assert result == json.loads(VALID_RESPONSE)
+    assert attempts == 1
+    mock_gemini.assert_called_once()
+    mock_groq.assert_not_called()
 
 
-# Groq failure triggers Gemini fallback using the same built prompt
 def test_generate_response_falls_back_to_gemini_when_groq_fails():
     with (
         patch("llm.LLM_PROVIDER", llm.GROQ),
-        patch(
-            "llm.build_prompt",
-            return_value="Built prompt",
-        ),
-        patch(
-            "llm.print_prompt_preview",
-        ),
         patch(
             "llm.generate_groq_response",
             side_effect=RuntimeError("Groq unavailable"),
         ) as mock_groq,
         patch(
             "llm.generate_gemini_response",
-            return_value="Gemini fallback response.",
+            return_value=VALID_RESPONSE,
         ) as mock_gemini,
     ):
-        result = llm.generate_response(
-            "What is Article 21?",
-            ["Article 21 context"],
-            "Previous history",
+        result, attempts = llm.generate_response(
+            "What is Article 14?",
+            ["Article 14 guarantees equality."],
+            "",
         )
 
-        assert result == "Gemini fallback response."
+    assert result == json.loads(VALID_RESPONSE)
+    assert attempts == 1
+    mock_groq.assert_called_once()
+    mock_gemini.assert_called_once()
 
-        mock_groq.assert_called_once_with("Built prompt")
-        mock_gemini.assert_called_once_with("Built prompt")
+
+def test_retry_loop_reaches_attempt_three():
+    invalid_response_1 = '{"answer": "Missing classification"}'
+    invalid_response_2 = (
+        '{"answer": "Test answer", "is_follow_up": "false"}'
+    )
+    valid_response = json.dumps(
+        {
+            "answer": "Test answer",
+            "is_follow_up": False,
+        }
+    )
+
+    with (
+        patch("llm.LLM_PROVIDER", llm.GROQ),
+        patch(
+            "llm.generate_groq_response",
+            side_effect=[
+                invalid_response_1,
+                invalid_response_2,
+                valid_response,
+            ],
+        ) as mock_groq,
+        patch("builtins.print") as mock_print,
+    ):
+        result, attempts = llm.generate_response(
+            "What is Article 14?",
+            ["Article 14 guarantees equality."],
+            "",
+        )
+
+    assert result == {
+        "answer": "Test answer",
+        "is_follow_up": False,
+    }
+    assert attempts == 3
+    assert mock_groq.call_count == 3
+
+    third_prompt = mock_groq.call_args_list[2].args[0]
+    assert "previous response failed validation" in third_prompt.lower()
+
+    printed_output = "\n".join(
+        str(call) for call in mock_print.call_args_list
+    )
+
+    assert "Attempt 1/3" in printed_output
+    assert "Attempt 2/3" in printed_output
+    assert "Attempt 3/3" in printed_output
+
+
+def test_retry_loop_raises_after_three_invalid_responses():
+    invalid_response = '{"answer": "Missing classification"}'
+
+    with (
+        patch("llm.LLM_PROVIDER", llm.GROQ),
+        patch(
+            "llm.generate_groq_response",
+            return_value=invalid_response,
+        ) as mock_groq,
+    ):
+        with pytest.raises(ValueError):
+            llm.generate_response(
+                "What is Article 14?",
+                ["Article 14 guarantees equality."],
+                "",
+            )
+
+    assert mock_groq.call_count == 3
+
+
+def test_generate_response_rejects_invalid_provider():
+    with patch("llm.LLM_PROVIDER", "unsupported"):
+        with pytest.raises(
+            ValueError,
+            match="Unsupported LLM provider",
+        ):
+            llm.generate_response(
+                "What is Article 14?",
+                ["Article 14 guarantees equality."],
+                "",
+            )
+
+
+def test_generate_response_propagates_invalid_json():
+    with (
+        patch("llm.LLM_PROVIDER", llm.OLLAMA),
+        patch(
+            "llm.generate_ollama_response",
+            return_value="This is not JSON",
+        ) as mock_ollama,
+    ):
+        with pytest.raises(json.JSONDecodeError):
+            llm.generate_response(
+                "What is Article 14?",
+                ["Article 14 guarantees equality."],
+                "",
+            )
+
+    assert mock_ollama.call_count == 3
