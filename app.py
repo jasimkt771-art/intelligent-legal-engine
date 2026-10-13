@@ -126,7 +126,7 @@ def process_query(query, session_id, redis_client, cache_index):
         print("\nResponse is from LLM\n")
 
         # Generate the answer and classification in one LLM call.
-        llm_result = generate_response(
+        llm_result, attempts = generate_response(
             retrieval_query,
             contexts,
             history,
@@ -141,7 +141,7 @@ def process_query(query, session_id, redis_client, cache_index):
         # Combine both classifications for the final decision.
         is_follow_up = llm_is_follow_up
 
-        print(f"Final follow-up classification: {is_follow_up}")
+        print(f"Final follow-up classification: {is_follow_up}\n")
 
         try:
             save_turn(session_id, query, response)
@@ -156,6 +156,8 @@ def process_query(query, session_id, redis_client, cache_index):
                 else:
                     # Avoid caching follow-ups because their meaning depends on conversation history.
                     print("\nQuery is a follow-up, so its not being saved to cache\n")
+
+                print(f'Total no of attempts: {attempts}\n')
 
             except Exception as e:
                 print(

@@ -148,7 +148,7 @@ def print_prompt_preview(query, contexts, history, max_chars=100):
 
 def generate_groq_response(prompt):
     try:
-        print("\nModel == GROQ")
+        print("\nModel == GROQ\n")
 
         groq_prompt = (
             prompt
@@ -386,45 +386,132 @@ def parse_llm_response(raw_response):
 
 
 
+
 def generate_response(query, contexts, history):
+    """
+    Generate and validate an LLM response.
+
+    Contract:
+    A — returns a validated dictionary or raises an exception.
+
+    A successful result contains:
+    {
+        "answer": str,
+        "is_follow_up": bool
+    }
+
+    Invalid response formats are retried up to three total attempts.
+    """
+
+    max_attempts = 3
+
     try:
         prompt = build_prompt(query, contexts, history)
 
+        current_prompt = prompt
+
         print("\nPrompt preview:\n", prompt[:1000])
 
-        raw_response = None
-
-        if LLM_PROVIDER == OLLAMA:
-            raw_response = generate_ollama_response(prompt)
-
-        elif LLM_PROVIDER == GROQ:
-            try:
-                raw_response = generate_groq_response(prompt)
-
-            except Exception as e:
-                print(f"\nGroq unavailable. Switching to Gemini.\n"
-                      f"Groq error: {e}\n")
-                raw_response = generate_gemini_response(prompt)
-
-        elif LLM_PROVIDER == GEMINI:
-            raw_response = generate_gemini_response(prompt)
-
-        else:
-            raise ValueError(
-                f"Unsupported LLM provider(generate_response[llm.py]): "
-                f"{LLM_PROVIDER}"
+        for attempt in range(1, max_attempts + 1):
+            print(
+                f"\nAttempt {attempt}/{max_attempts}: "
+                "Generating LLM response..."
             )
 
-        # Parse and validate the JSON returned by the selected provider.
-        result = parse_llm_response(raw_response)
+            raw_response = None
 
-        return result
+            # Generate using the configured provider.
+            if LLM_PROVIDER == OLLAMA:
+                raw_response = generate_ollama_response(
+                    current_prompt
+                )
 
-    except KeyError as e:
+            elif LLM_PROVIDER == GROQ:
+                try:
+                    raw_response = generate_groq_response(
+                        current_prompt
+                    )
+
+                except Exception as e:
+                    print(
+                        "\nGroq unavailable. Switching to Gemini"
+                        "(generate_response[llm.py]):\n",
+                        e,
+                    )
+
+                    raw_response = generate_gemini_response(
+                        current_prompt
+                    )
+
+            elif LLM_PROVIDER == GEMINI:
+                raw_response = generate_gemini_response(
+                    current_prompt
+                )
+
+            else:
+                raise ValueError(
+                    "Unsupported LLM provider"
+                    "(generate_response[llm.py]): "
+                    f"{LLM_PROVIDER}"
+                )
+
+            # Validate the JSON and its required fields.
+            try:
+                result = parse_llm_response(raw_response)
+
+                print(
+                    f"Attempt {attempt}/{max_attempts}: "
+                    "Response validated successfully.\n"
+                )
+
+                return result, attempt
+
+            except (ValueError, TypeError) as e:
+                print(
+                    f"\nAttempt {attempt}/{max_attempts}: "
+                    "Invalid response format"
+                    "(generate_response[llm.py]):\n",
+                    e,
+                )
+
+                if attempt == max_attempts:
+                    print(
+                        "\nMaximum attempts reached. "
+                        "Unable to obtain a valid response"
+                        "(generate_response[llm.py])."
+                    )
+                    raise
+
+                # Give the model specific instructions for the next attempt.
+                current_prompt = (
+                    prompt
+                    + "\n\nIMPORTANT: Your previous response failed "
+                    "validation.\n"
+                    + f"Validation error: {e}\n"
+                    + "Regenerate the complete answer. Return only "
+                    "one valid JSON object containing exactly these "
+                    "two keys:\n"
+                    + '- "answer": a non-empty string\n'
+                    + '- "is_follow_up": a JSON Boolean, true or false\n'
+                    + "Do not put the Boolean in quotation marks. "
+                    "Do not use Markdown fences or additional text."
+                )
+
+                print(
+                    f"Retrying with corrective instructions: "
+                    f"attempt {attempt + 1}/{max_attempts}."
+                )
+
+    except (TypeError, ValueError, json.JSONDecodeError) as e:
         print(
-            "\nMissing required field in LLM response(generate_response[llm.py]): \n", e)
+            "\nException content/text(generate_response[llm.py]):\n",
+            e,
+        )
         raise
 
     except Exception as e:
-        print("\nError generating response(generate_response[llm.py]):\n", e)
+        print(
+            "\nException content/text(generate_response[llm.py]):\n",
+            e,
+        )
         raise
